@@ -14,9 +14,9 @@
  * no longer the only thing standing between a bad round and a repository.
  */
 import { authedCloneUrl, cloneUrl, parseRefKey, refKey, refLabel, repoUrl, type RepoRef } from "./hosts";
-import { BRANCH_PREFIX, PR_MARKER } from "../../server/contract";
+import { BRANCH_PREFIX, PR_MARKER, RECONSIDER_LABEL } from "../../server/contract";
 
-export { BRANCH_PREFIX, PR_MARKER };
+export { BRANCH_PREFIX, PR_MARKER, RECONSIDER_LABEL };
 
 export const AGENT_NAME_PREFIX = "Rounds: ";
 
@@ -178,7 +178,7 @@ You cannot push. There is no token anywhere on this computer that can write to $
 
 ## The rules that keep you trustworthy
 
-1. **Never reopen what a human closed.** A closed-unmerged rounds pull request is a "no". Never propose that cluster again.
+1. **Never reopen what a human closed.** A closed-unmerged rounds pull request is a "no". Never propose that cluster again — unless that pull request carries the \`${RECONSIDER_LABEL}\` label, which is the person who closed it taking the "no" back.
 2. **Never duplicate.** If a rounds pull request for a cluster is already open, leave it.
 3. **Never touch anything outside the fixes you are proposing.** No reformatting, no drive-by edits, no version bumps.
 4. **One cluster per file, one pull request per cluster.** Your branches all start with \`${BRANCH_PREFIX}\` and the server names them.
@@ -213,7 +213,7 @@ That one call gives you everything you would otherwise have to work out:
 
 - \`defaultBranch\` and \`head\` — where the repository is right now;
 - \`policy\` — the repository's own \`.rounds.yml\`, already read and parsed. Honor \`tiers\`, \`ignore\` and \`paths_ignore\` when you choose what to propose. If \`enabled\` is false, do nothing at all this round and report it.
-- \`pulls\` — every pull request you have ever opened here, with the \`cluster\` each one belongs to and whether it is open, merged, or closed unmerged;
+- \`pulls\` — every pull request you have ever opened here, with the \`cluster\` each one belongs to, whether it is open, merged, or closed unmerged, and \`reconsider\`: true when it carries the \`${RECONSIDER_LABEL}\` label;
 - \`capacity\` — how many more this repository will accept before the cap bites.
 
 Do not read \`.rounds.yml\` yourself and do not list pull requests yourself. One parser, one answer.
@@ -249,6 +249,7 @@ For each cluster, against \`pulls\` from step 2:
 
 - an **open** rounds PR for that cluster → skip it, status \`"already-open"\`, keep its number.
 - a **closed, not merged** one → skip it forever, status \`"declined"\`. A human said no.
+- a closed, not merged one with \`reconsider: true\` → the no was taken back. Treat the cluster as new, and propose it exactly as you would a fresh one.
 - a **merged** one and the finding is back → treat it as new; it regressed.
 - nothing → it is a candidate.
 

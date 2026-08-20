@@ -20,6 +20,7 @@ interface FakePull {
   merged_at: string | null;
   head: string;
   title?: string;
+  labels?: string[];
 }
 interface FakeOpts {
   pushable?: string[];
@@ -87,6 +88,7 @@ function fakeGitHub(opts: FakeOpts = {}) {
             html_url: `https://github.com/${slug}/pull/${p.number}`,
             title: p.title ?? "a pull request",
             head: { ref: p.head },
+            labels: (p.labels ?? []).map((name) => ({ name })),
           })),
         );
       }
@@ -396,7 +398,19 @@ describe("POST /gh/state", () => {
     expect(state.defaultBranch).toBe("main");
     expect(state.head).toBe("basesha0");
     expect(state.openPrs).toBe(1); // the feature branch is not ours and does not count
-    expect(state.pulls).toEqual([{ number: 41, state: "open", merged: false, head: "rounds/dockerfile", url: "https://github.com/o/r/pull/41", title: "a pull request", cluster: "dockerfile" }]);
+    expect(state.pulls).toEqual([
+      {
+        number: 41,
+        state: "open",
+        merged: false,
+        head: "rounds/dockerfile",
+        url: "https://github.com/o/r/pull/41",
+        title: "a pull request",
+        labels: [],
+        cluster: "dockerfile",
+        reconsider: false,
+      },
+    ]);
     expect(state.capacity).toBe(2);
   });
 
@@ -499,6 +513,38 @@ describe("POST /gh/propose", () => {
     expect(res.status).toBe(409);
     expect(await res.json()).toMatchObject({ reason: "declined", pr: 31 });
     expect(fake.written.pull).toBeNull();
+  });
+
+  test("`rounds:reconsider` on the closed pull request takes the no back", async () => {
+    const fake = fakeGitHub({
+      pulls: [{ number: 31, state: "closed", merged_at: null, head: "rounds/github-workflows-ci-yml", labels: ["rounds:reconsider"] }],
+    });
+    expect((await postJson(routesWith(fake), "/gh/propose", proposal())).status).toBe(201);
+    // The branch is still there from the declined attempt, so this is a force
+    // update rather than a create — the one path where that is expected.
+    expect(fake.written.pull).toMatchObject({ head: "rounds/github-workflows-ci-yml" });
+  });
+
+  test("the label forgives the pull request it is on, not the cluster forever", async () => {
+    const fake = fakeGitHub({
+      pulls: [
+        { number: 45, state: "closed", merged_at: null, head: "rounds/github-workflows-ci-yml" },
+        { number: 31, state: "closed", merged_at: null, head: "rounds/github-workflows-ci-yml", labels: ["rounds:reconsider"] },
+      ],
+    });
+    const res = await postJson(routesWith(fake), "/gh/propose", proposal());
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ reason: "declined", pr: 45 });
+  });
+
+  test("a label on somebody else's pull request forgives nothing", async () => {
+    const fake = fakeGitHub({
+      pulls: [
+        { number: 31, state: "closed", merged_at: null, head: "rounds/github-workflows-ci-yml" },
+        { number: 12, state: "closed", merged_at: null, head: "rounds/dockerfile", labels: ["rounds:reconsider"] },
+      ],
+    });
+    expect((await postJson(routesWith(fake), "/gh/propose", proposal())).status).toBe(409);
   });
 
   test("a cluster that was merged and regressed may be proposed again", async () => {

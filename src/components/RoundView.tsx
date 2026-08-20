@@ -18,6 +18,7 @@ import { fileUrl, type RepoRef } from "../lib/hosts";
 import { relativeTime } from "../lib/cron";
 import {
   arrangeRound,
+  RECONSIDER_LABEL,
   ruleDocUrl,
   type Cluster,
   type ClusterStatus,
@@ -30,7 +31,7 @@ import { Diff } from "./Diff";
 const STATUS: Record<ClusterStatus, { label: string; tone: string; blurb: string }> = {
   opened: { label: "opened", tone: "ok", blurb: "a pull request went up this round" },
   "already-open": { label: "already open", tone: "brand", blurb: "proposed in an earlier round, still waiting on you" },
-  declined: { label: "declined", tone: "mute", blurb: "you closed this one — it will never be raised again" },
+  declined: { label: "declined", tone: "mute", blurb: `you closed this one — it stays closed unless you label that pull request ${RECONSIDER_LABEL}` },
   deferred: { label: "held back", tone: "warn", blurb: "kept back to stay under the open pull request cap" },
   failed: { label: "failed", tone: "danger", blurb: "it could not verify the fix, or the server refused it, so nothing went up" },
   clean: { label: "no action", tone: "mute", blurb: "considered, nothing to do" },
@@ -199,6 +200,14 @@ function FileRow(props: { report: FileReport; repo: RepoRef; branch: string }) {
       )}
 
       {c?.note && <p className="cnote">{c.note}</p>}
+      {/* The one way back, said where the "no" is visible — otherwise a
+          cluster closed by mistake is unrecoverable and nothing says so. */}
+      {c?.status === "declined" && (
+        <p className="cnote">
+          {c.pr !== undefined ? <>Label #{c.pr} </> : <>Label that pull request </>}
+          <code>{RECONSIDER_LABEL}</code> on GitHub to have it proposed again.
+        </p>
+      )}
       {report.diff && <Diff diff={report.diff} />}
     </div>
   );

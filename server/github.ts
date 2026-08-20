@@ -193,6 +193,8 @@ export interface PullSummary {
   head: string;
   url: string;
   title: string;
+  /** Its labels, lowercased by GitHub or not — `rounds:reconsider` matters. */
+  labels: string[];
 }
 
 export async function repoInfo(token: string, slug: string, deps: Deps = {}): Promise<{ defaultBranch: string }> {
@@ -208,15 +210,30 @@ export async function repoInfo(token: string, slug: string, deps: Deps = {}): Pr
  * is why the answer comes from GitHub rather than from anything we store.
  */
 export async function listPullsWithPrefix(token: string, slug: string, prefix: string, deps: Deps = {}): Promise<PullSummary[]> {
-  const pulls = await gh<Array<{ number: number; state: string; merged_at: string | null; html_url: string; title: string; head: { ref: string } }>>(
-    `${deps.api ?? API}/repos/${slug}/pulls?state=all&per_page=100&sort=created&direction=desc`,
-    token,
-    {},
-    deps.fetchImpl,
-  );
+  const pulls = await gh<
+    Array<{
+      number: number;
+      state: string;
+      merged_at: string | null;
+      html_url: string;
+      title: string;
+      head: { ref: string };
+      labels?: Array<{ name?: string }>;
+    }>
+  >(`${deps.api ?? API}/repos/${slug}/pulls?state=all&per_page=100&sort=created&direction=desc`, token, {}, deps.fetchImpl);
   return pulls
     .filter((p) => p.head.ref.startsWith(prefix))
-    .map((p) => ({ number: p.number, state: p.state, merged: p.merged_at !== null, head: p.head.ref, url: p.html_url, title: p.title }));
+    .map((p) => ({
+      number: p.number,
+      state: p.state,
+      merged: p.merged_at !== null,
+      head: p.head.ref,
+      url: p.html_url,
+      title: p.title,
+      // Labels come back on the list itself, so reading them costs nothing —
+      // and `rounds:reconsider` is the only way a decline is ever undone.
+      labels: (p.labels ?? []).flatMap((l) => (typeof l.name === "string" ? [l.name] : [])),
+    }));
 }
 
 /** A file's text at a ref, or null when it is not there. */

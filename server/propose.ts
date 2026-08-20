@@ -46,6 +46,7 @@ import {
   LIMITS,
   markerFor,
   PR_MARKER,
+  reconsidered,
   SEVERITIES,
   TIERS,
   type Finding,
@@ -239,7 +240,13 @@ export interface RoundState {
   /** The head of the default branch right now — what a fix should be based on. */
   head: string;
   policy: Policy;
-  pulls: Array<PullSummary & { cluster: string | null }>;
+  /**
+   * Every rounds pull request this repository has ever had, with the cluster
+   * it belongs to and whether a `rounds:reconsider` label takes its decline
+   * back — so the round reconciles against the same answer the server will
+   * enforce, rather than working it out from labels itself.
+   */
+  pulls: Array<PullSummary & { cluster: string | null; reconsider: boolean }>;
   openPrs: number;
   /** How many more this repository will accept before the cap bites. */
   capacity: number;
@@ -266,7 +273,7 @@ export async function roundState(app: AppConfig, repo: string, deps: Deps = {}):
     defaultBranch: info.defaultBranch,
     head,
     policy,
-    pulls: pulls.map((p) => ({ ...p, cluster: clusterOfBranch(p.head) })),
+    pulls: pulls.map((p) => ({ ...p, cluster: clusterOfBranch(p.head), reconsider: reconsidered(p.labels) })),
     openPrs,
     capacity: Math.max(0, policy.maxOpenPrs - openPrs),
   };
@@ -307,7 +314,11 @@ export async function propose(app: AppConfig, repo: string, request: ProposeRequ
   // A closed-unmerged rounds pull request is a person saying no. It stays a no
   // — this is the check that makes the promise in the README true rather than
   // merely intended.
-  const declined = mine.find((p) => p.state === "closed" && !p.merged);
+  //
+  // Unless that same person labelled it `rounds:reconsider`, which is the one
+  // way back. It forgives the pull request it is on and nothing else: a later
+  // one closed unmerged carries no label, so it declines the cluster again.
+  const declined = mine.find((p) => p.state === "closed" && !p.merged && !reconsidered(p.labels));
   if (declined) {
     throw new Refused(
       `#${declined.number} for ${request.cluster} was closed without merging — that cluster is declined.`,

@@ -22,10 +22,10 @@
  * newest first — so the history survives without the app storing anything.
  * The agent's side of the contract is `spec.ts`; change one, change both.
  */
-import { CATEGORIES, FIX_KINDS, ruleDocUrl, SEVERITIES, TIERS, type Finding, type Severity } from "../../server/contract";
+import { CATEGORIES, FIX_KINDS, RECONSIDER_LABEL, ruleDocUrl, SEVERITIES, TIERS, type Finding, type Severity } from "../../server/contract";
 
 export type { Authority, Category, Finding, FixKind, Severity, Tier } from "../../server/contract";
-export { ruleDocUrl };
+export { RECONSIDER_LABEL, ruleDocUrl };
 
 export type ClusterStatus = "opened" | "already-open" | "declined" | "deferred" | "failed" | "clean";
 

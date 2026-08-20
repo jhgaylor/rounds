@@ -111,6 +111,8 @@ const EARLIER = block({ summary: { total: 11 }, clusters: [], openPrs: 0 }, "Qui
 describe("RoundView", () => {
   const entries = foldRounds([{ reply: EARLIER, ranAt: "2026-08-13T09:00:00Z" }, { reply: LATEST, ranAt: "2026-08-20T09:00:00Z" }]);
   const html = renderToString(<RoundView entries={entries} repo={REPO} running={false} />);
+  /** The same html without React's text-boundary comments or tags, for reading sentences out of it. */
+  const stripped = html.replace(/<!-- -->/g, "").replace(/<[^>]+>/g, "");
 
   test("leads with the counts and the agent's own sentence", () => {
     expect(html).toContain("Opened one, left the rest.");
@@ -123,9 +125,10 @@ describe("RoundView", () => {
     for (const label of ["opened", "declined", "failed", "already open"]) expect(html).toContain(label);
   });
 
-  test("a declined cluster says it will not come back", () => {
+  test("a declined cluster says it will not come back, and how to take that back", () => {
     expect(html).toContain("closed unmerged — not raising it again");
-    expect(html).toContain("you closed this one — it will never be raised again");
+    expect(html).toContain("you closed this one — it stays closed unless you label that pull request rounds:reconsider");
+    expect(stripped).toContain("Label #38 rounds:reconsider on GitHub to have it proposed again.");
   });
 
   test("a failed cluster explains itself rather than being silent", () => {

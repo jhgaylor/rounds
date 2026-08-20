@@ -20,7 +20,8 @@ opposite defaults, because nobody is watching when it runs.
 4. **Reconcile against its own past work.** This is the step that decides
    whether an unattended tool is useful or a nuisance:
    - a rounds pull request already open for that file → leave it alone
-   - one you **closed unmerged** → that is a no; never propose it again
+   - one you **closed unmerged** → that is a no; never propose it again,
+     unless you labelled it `rounds:reconsider`
    - one that merged and the finding came back → treat it as new
 5. **Fix and verify.** Apply chant's deterministic diffs; for guidance findings,
    make the change only when confident it preserves behavior. Then re-run the
@@ -51,7 +52,7 @@ does not control:
 
 | rule | enforced where |
 |---|---|
-| Never reopen what a human closed | **server** — a closed-unmerged `rounds/*` PR refuses that cluster forever |
+| Never reopen what a human closed | **server** — a closed-unmerged `rounds/*` PR refuses that cluster until you label it `rounds:reconsider` |
 | Never open a second pull request for something already proposed | **server** — an open one on the branch refuses |
 | Never write outside `rounds/*` | **server** — the branch is derived from the cluster key, never sent |
 | At most **3** open at once (or your `max_open_prs`) | **server** — counted before anything is written |
@@ -62,6 +63,22 @@ does not control:
 A refusal is not a failure. The round records it against the cluster —
 `already-open`, `declined`, `deferred` — and moves on, which is exactly what
 the app renders.
+
+### Taking a "no" back
+
+A decline is permanent on purpose: closing a rounds pull request unmerged is
+how you tell it to stop, and a bot that argues is worse than no bot. But a
+pull request closed by mistake would otherwise be unrecoverable, so there is
+exactly one way back — **label the closed pull request `rounds:reconsider`**
+and the next round proposes that file again as if it were new.
+
+It lives on the pull request rather than in `.rounds.yml` for the same reason
+the branch name and the marker do: the state belongs at GitHub, where the
+person who said no was already standing, and there is nothing to keep in sync.
+It forgives the pull request it is on and nothing else — close the next one
+unmerged and the cluster is declined again, since that one carries no label.
+The app shows the label to use on every declined row, so you do not have to
+remember it.
 
 ## What comes back
 

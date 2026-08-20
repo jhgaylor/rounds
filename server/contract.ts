@@ -38,6 +38,27 @@ export function clusterOfBranch(branch: string): string | null {
 export const markerFor = (cluster: string) => `<!-- ${PR_MARKER}${cluster} -->`;
 
 /**
+ * The one way to take a "no" back.
+ *
+ * A rounds pull request closed unmerged declines its cluster permanently —
+ * that is the promise that makes an unattended bot bearable, so it cannot be
+ * undone by asking nicely. Label the closed pull request `rounds:reconsider`
+ * and the next round may propose that file again.
+ *
+ * It lives on the pull request rather than in `.rounds.yml` for the same
+ * reason the branch name and the marker do: state belongs at GitHub, where
+ * the person saying no was already standing, and there is nothing to keep in
+ * sync. It forgives exactly the pull request it is on, so closing the next one
+ * unmerged declines the cluster again.
+ */
+export const RECONSIDER_LABEL = "rounds:reconsider";
+
+/** Does this pull request's label set take its decline back? */
+export function reconsidered(labels: readonly string[] | undefined): boolean {
+  return (labels ?? []).some((l) => l.toLowerCase() === RECONSIDER_LABEL);
+}
+
+/**
  * What a proposal may be. Generous enough for any configuration fix, small
  * enough that a runaway round cannot post a repository at us.
  */
