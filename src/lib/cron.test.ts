@@ -118,7 +118,7 @@ git push "https://x-access-token:$GITHUB_TOKEN@github.com/o/r.git" HEAD:refs/hea
   const OPTED_IN = "quick wins (merge-worthy + deterministic) **and** needs-review findings (merge-worthy + guidance)";
   const MECHANICAL = "quick wins only (merge-worthy + deterministic)";
 
-  test("the judgement-calls opt-in survives a rewrite", async () => {
+  test("the judgment-calls opt-in survives a rewrite", async () => {
     const { policyOfPrompt } = await import("./spec");
     expect(policyOfPrompt(OLD_PROMPT(OPTED_IN, "https://rounds.inevitable.fyi")).includeNeedsReview).toBe(true);
     expect(policyOfPrompt(OLD_PROMPT(MECHANICAL, "https://rounds.inevitable.fyi")).includeNeedsReview).toBe(false);

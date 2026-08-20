@@ -1,6 +1,6 @@
 import { afterAll, describe, expect, test } from "bun:test";
 
-// The server also replaces nginx, so the static-file behaviour is worth
+// The server also replaces nginx, so the static-file behavior is worth
 // pinning: a real deep link has to boot the SPA rather than 404, and hashed
 // assets have to be cacheable or every reload refetches the bundle.
 

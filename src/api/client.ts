@@ -116,7 +116,7 @@ export class FountainClient {
   // ── the GitHub App's own backend, served by this same origin ──────────────
 
   /**
-   * Ask our backend for a grant: a signed note that this person authorised
+   * Ask our backend for a grant: a signed note that this person authorized
    * work on this repo. The agent trades it for a short-lived token each round,
    * so nothing standing is ever stored.
    */
@@ -127,7 +127,7 @@ export class FountainClient {
       body: JSON.stringify({ token: githubToken, repo }),
     });
     const body = (await res.json().catch(() => ({}))) as { grant?: string; login?: string; error?: string };
-    if (!res.ok || !body.grant) throw new Error(body.error ?? "Could not authorise this repository.");
+    if (!res.ok || !body.grant) throw new Error(body.error ?? "Could not authorize this repository.");
     return { grant: body.grant, login: body.login ?? "" };
   }
 

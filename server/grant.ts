@@ -4,7 +4,7 @@
  * A rounds-style agent has no person present to sign in, so it needs
  * something durable. Handing it a GitHub token would mean a standing
  * credential sitting in a vault; instead it carries a **grant** — a signed
- * statement that "<login> authorised work on <repo>" — and trades it for a
+ * statement that "<login> authorized work on <repo>" — and trades it for a
  * one-hour installation token each time it runs.
  *
  * Deliberately stateless: the grant is HMAC-signed rather than stored, so
@@ -16,7 +16,7 @@
 import crypto from "node:crypto";
 
 export interface Grant {
-  /** The GitHub login that authorised it. */
+  /** The GitHub login that authorized it. */
   login: string;
   /** owner/repo it is good for, and nothing else. */
   repo: string;

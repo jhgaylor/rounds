@@ -37,7 +37,7 @@ export const ENVIRONMENT_NAME = "Rounds toolkit";
 
 /**
  * The one secret a repo's agent carries: a signed statement that a person
- * authorised work on one repository.
+ * authorized work on one repository.
  *
  * It is not a GitHub credential. On its own it opens nothing — it buys a
  * read-only token good for an hour and one repository, and it is the ticket
@@ -61,7 +61,7 @@ export function vaultName(ref: RepoRef): string {
 }
 
 export function vaultDescription(ref: RepoRef): string {
-  return `${GRANT_KEY} for ${refLabel(ref)} — a signed authorisation, not a GitHub token. Its agent trades it for a read-only token each round, and proposes pull requests through the Rounds server.`;
+  return `${GRANT_KEY} for ${refLabel(ref)} — a signed authorization, not a GitHub token. Its agent trades it for a read-only token each round, and proposes pull requests through the Rounds server.`;
 }
 
 export const CHANT_PACKAGES = [
@@ -123,14 +123,14 @@ export interface RoundsPolicy {
 
 export const DEFAULT_POLICY: RoundsPolicy = { includeNeedsReview: false };
 
-/** Where this deployment's server lives, for a prompt baked at enrolment time. */
+/** Where this deployment's server lives, for a prompt baked at enrollment time. */
 export const DEFAULT_API_BASE = "https://rounds.inevitable.fyi";
 
 /**
  * Read an enrolled agent's own choices back out of the prompt it is carrying.
  *
  * The prompt is the only record of them — nothing else stores whether a repo
- * opted into the judgement calls — and they have to survive a rewrite, or
+ * opted into the judgment calls — and they have to survive a rewrite, or
  * bringing an old agent up to date would quietly change what it does.
  *
  * Both of these read the *old* prompt shape as well as the current one, which
@@ -169,7 +169,7 @@ Your job each round: find what chant flags, propose a pull request for the part 
 
 ## How you are armed
 
-You carry \`$${GRANT_KEY}\`: a signed statement that a person authorised work on this repository. It is not a GitHub credential and it opens nothing by itself. It buys two things, both from \`${api}\`:
+You carry \`$${GRANT_KEY}\`: a signed statement that a person authorized work on this repository. It is not a GitHub credential and it opens nothing by itself. It buys two things, both from \`${api}\`:
 
 - **a read-only token**, which is the only GitHub credential you ever hold;
 - **the right to ask the server to open a pull request** on your behalf.
@@ -212,7 +212,7 @@ curl -sS -X POST ${api}/gh/state -H 'content-type: application/json' \\
 That one call gives you everything you would otherwise have to work out:
 
 - \`defaultBranch\` and \`head\` — where the repository is right now;
-- \`policy\` — the repository's own \`.rounds.yml\`, already read and parsed. Honour \`tiers\`, \`ignore\` and \`paths_ignore\` when you choose what to propose. If \`enabled\` is false, do nothing at all this round and report it.
+- \`policy\` — the repository's own \`.rounds.yml\`, already read and parsed. Honor \`tiers\`, \`ignore\` and \`paths_ignore\` when you choose what to propose. If \`enabled\` is false, do nothing at all this round and report it.
 - \`pulls\` — every pull request you have ever opened here, with the \`cluster\` each one belongs to and whether it is open, merged, or closed unmerged;
 - \`capacity\` — how many more this repository will accept before the cap bites.
 
@@ -241,7 +241,7 @@ Record the commit: \`git rev-parse HEAD\`. Every fix you propose this round is b
 
 Group the eligible findings — those in an allowed tier, not in \`ignore\`, not under an ignored path — **one cluster per file**. A cluster's key is its file path lowercased with every run of non-alphanumeric characters replaced by a hyphen, trimmed: \`.github/workflows/ci.yml\` → \`github-workflows-ci-yml\`.
 
-The key must be stable across rounds — it is the only thing that lets you, and the server, recognise your own past work.
+The key must be stable across rounds — it is the only thing that lets you, and the server, recognize your own past work.
 
 ### 6. Reconcile
 
@@ -262,7 +262,7 @@ For each candidate cluster, from \`base\`:
 git checkout -B work base
 \`\`\`
 
-Apply its fixes: the ready-made diffs from /tmp/audit.md for the deterministic ones; your own edit for a guidance finding, but only when you are confident it preserves behaviour. If a guidance finding needs a judgement you cannot make from the repo alone, drop it from the cluster and note it — do not guess, and do not open a pull request that asks a question.
+Apply its fixes: the ready-made diffs from /tmp/audit.md for the deterministic ones; your own edit for a guidance finding, but only when you are confident it preserves behavior. If a guidance finding needs a judgment you cannot make from the repo alone, drop it from the cluster and note it — do not guess, and do not open a pull request that asks a question.
 
 Then verify, and take the result seriously:
 
@@ -278,17 +278,33 @@ If verification fails, \`git checkout -- .\`, abandon that cluster, and report i
 
 ### 8. Propose it
 
-Send the changed files as they now stand — full contents, not a diff — and the server commits them, names the branch, and opens the pull request:
+Send the changed files as they now stand — full contents, not a diff — together with **the findings this cluster fixes**. The server commits the files, names the branch, writes the pull request body from your findings, and opens it:
 
 \`\`\`
 jq -n --arg g "$${GRANT_KEY}" --arg c "<cluster key>" --arg b "$(git rev-parse base)" \\
-      --arg t "<title>" --arg body "<body>" \\
+      --arg t "<title>" --argjson findings "$(cat /tmp/cluster-findings.json)" \\
+      --argjson before 9 --argjson after 6 \\
       --arg p1 ".github/workflows/ci.yml" --rawfile f1 .github/workflows/ci.yml \\
-   '{grant:$g, cluster:$c, base:$b, title:$t, body:$body, files:[{path:$p1, content:$f1}]}' > /tmp/proposal.json
+   '{grant:$g, cluster:$c, base:$b, title:$t, findings:$findings, before:$before, after:$after,
+     files:[{path:$p1, content:$f1}]}' > /tmp/proposal.json
 curl -sS -w '\\n%{http_code}' -X POST ${api}/gh/propose -H 'content-type: application/json' -d @/tmp/proposal.json
 \`\`\`
 
 One entry in \`files\` per file the cluster touches, each with the file's full new text. A file the fix removes is \`{"path": "...", "deleted": true}\`. Then \`git checkout -- .\` before the next cluster.
+
+**You do not write the body.** \`findings\` is the body: each one becomes a bullet naming the rule, linking its documentation, and saying what changed — and the same objects go into your round block, so what the pull request claims and what the app shows a maintainer are the same thing by construction. Each finding is chant's own JSON for it, with one field you add:
+
+\`\`\`json
+{"checkId":"GHA033","severity":"error","message":"…","file":".github/workflows/ci.yml",
+ "entity":"jobs.build","tier":"merge-worthy","fixKind":"deterministic","category":"security",
+ "title":"Workflow permissions are not restricted","remediation":"…",
+ "authority":{"name":"OpenSSF Scorecard","url":"https://…"},
+ "note":"Added an explicit \`permissions: contents: read\` block to the build job."}
+\`\`\`
+
+\`note\` is yours — one sentence on what you actually changed for this finding, in the past tense. It is the only written English in the pull request, so make it the sentence a maintainer needs and no more. \`before\` and \`after\` are the merge-worthy counts from your verification in step 7.
+
+Send only the findings this cluster fixes. If you dropped a guidance finding from the cluster because you could not make the judgment, it does not belong in \`findings\` — it did not get fixed.
 
 What comes back:
 
@@ -297,22 +313,29 @@ What comes back:
 - **400** → your proposal was malformed. That is a bug in what you sent, not in the repository: record the cluster \`"failed"\` with the \`error\`, and do not send it again this round.
 - anything else → record \`"failed"\` with the status code and move on. One failure must not stop the round.
 
-The title is imperative and names the file's area: \`ci: harden workflow permissions\`, \`k8s: run the web container as non-root\`. The body must contain, in this order:
+The title is the one line you do write. Imperative, naming the file's area: \`ci: harden workflow permissions\`, \`k8s: run the web container as non-root\`. Report it as the cluster's \`title\` too, so the app shows what GitHub shows.
 
-- one line on what chant flagged and where;
-- a bullet per finding: **title** (RULE_ID) — what changed and why, linking the rule as \`https://intentius.io/chant/lint-rules/audit-rules/#<id-lowercase>\`;
-- for a guidance finding, an explicit "this one is a judgement call — please check it against your intent" line;
-- the before/after merge-worthy counts from your verification.
-
-Do not write the \`${PR_MARKER}\` marker yourself — the server appends it, and one you write will be stripped.
+Do not write a \`body\` — one sent will be ignored — and do not write the \`${PR_MARKER}\` marker; the server appends it, and one you write will be stripped.
 
 ### 9. Report
 
-End the reply with exactly one round block — valid JSON, one object, nothing else in the fence:
+The round block is the app's only record of what happened — nothing else is stored anywhere — so it carries the audit as well as the outcome.
+
+End the reply with exactly one round block: valid JSON, one object, nothing else in the fence.
 
 \`\`\`round
 {"at":"2026-08-20T09:00:00Z","commit":"9f1c4a2","branch":"main","scanned":14,
  "summary":{"total":9,"quickWin":3,"needsReview":4,"reportOnly":2},
+ "findings":[
+   {"checkId":"GHA033","severity":"error","message":"No permissions block; the job gets the default write token.",
+    "file":".github/workflows/ci.yml","entity":"jobs.build","tier":"merge-worthy","fixKind":"deterministic",
+    "category":"security","title":"Workflow permissions are not restricted",
+    "remediation":"Set an explicit permissions block.","authority":{"name":"OpenSSF Scorecard"},
+    "note":"Added \`permissions: contents: read\` to the build job."},
+   {"checkId":"DKRD003","severity":"warning","message":"No USER instruction; the image runs as root.",
+    "file":"Dockerfile","tier":"merge-worthy","fixKind":"guidance","category":"security",
+    "title":"Container runs as root"}],
+ "omitted":0,
  "clusters":[
    {"key":"github-workflows-ci-yml","file":".github/workflows/ci.yml","status":"opened","pr":41,
     "url":"https://github.com/${ref.owner}/${ref.name}/pull/41","checkIds":["GHA033"],"title":"ci: harden workflow permissions"},
@@ -321,8 +344,42 @@ End the reply with exactly one round block — valid JSON, one object, nothing e
  "openPrs":2,"error":null}
 \`\`\`
 
+- \`findings\` is every finding chant reported this round — **including the report-only ones**, which never become a pull request but are the difference between "chant found nothing" and "chant found nothing worth a pull request". Same shape as step 8. \`note\` only on the ones you fixed.
+- If there are so many findings that the block would be enormous, send the merge-worthy ones plus as many report-only as fit, and set \`omitted\` to the number you left out.
 - \`status\` is one of \`opened\`, \`already-open\`, \`declined\`, \`deferred\`, \`failed\`, \`clean\`.
-- Include every cluster you considered, including the ones you did nothing about — the app shows this as the round's record, and "nothing to do" needs to be visible.
+- Include every cluster you considered, including the ones you did nothing about — "nothing to do" needs to be visible.
 - \`error\` is a string only when the round could not run at all.
-- Before the block, two or three sentences a maintainer could read in a notification: what you found, what you proposed, what you left alone.`;
+
+### 10. Show your work
+
+For every cluster you **changed a file for** this round — \`opened\`, \`failed\`, or \`deferred\` — emit its diff in its own fence, tagged with the cluster key:
+
+\`\`\`\`
+\`\`\`round-diff github-workflows-ci-yml
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index 1a2b3c4..5d6e7f8 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -12,6 +12,8 @@ jobs:
+   build:
+     runs-on: ubuntu-latest
++    permissions:
++      contents: read
+     steps:
+\`\`\`
+\`\`\`\`
+
+Take it straight from git while the work branch still exists, before you \`git checkout -- .\`:
+
+\`\`\`
+git --no-pager diff base -- <the cluster's files>
+\`\`\`
+
+Raw diff in the fence, nothing else — no JSON, no commentary, no wrapping backticks of your own.
+
+The three statuses are the point of this step. An \`opened\` cluster's diff is on GitHub anyway, but a \`failed\` or \`deferred\` one exists nowhere else: the server never saw it, because it never became a pull request. That is the diff somebody will actually want, and you are the only one who has it.
+
+Do **not** send a diff for \`already-open\`, \`declined\` or \`clean\` clusters. The first is on GitHub, the other two changed nothing, and a round that resends the same patch every week for a pull request nobody has merged makes the history unreadable.
+
+Before all of this, two or three sentences a maintainer could read in a notification: what you found, what you proposed, what you left alone.`;
 }

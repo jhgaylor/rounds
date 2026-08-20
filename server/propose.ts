@@ -35,7 +35,22 @@ import {
   type PullSummary,
 } from "./github";
 import { parsePolicy, type Policy } from "./policy";
-import { BRANCH_PREFIX, branchFor, CLUSTER_KEY, clusterOfBranch, LIMITS, markerFor, PR_MARKER } from "./contract";
+import {
+  BRANCH_PREFIX,
+  branchFor,
+  CATEGORIES,
+  CLUSTER_KEY,
+  clusterOfBranch,
+  FINDING_LIMITS,
+  FIX_KINDS,
+  LIMITS,
+  markerFor,
+  PR_MARKER,
+  SEVERITIES,
+  TIERS,
+  type Finding,
+} from "./contract";
+import { renderBody } from "./prbody";
 
 /**
  * A refusal the round should report and move past, rather than retry. Every
@@ -58,7 +73,15 @@ export interface ProposeRequest {
   cluster: string;
   base: string;
   title: string;
-  body: string;
+  /**
+   * The findings this cluster fixes. The body is rendered from these rather
+   * than sent as prose, so the pull request and the round block the app shows
+   * are the same data — see `prbody.ts`.
+   */
+  findings: Finding[];
+  /** Merge-worthy counts either side of the fix, from the round's verification. */
+  before?: number;
+  after?: number;
   files: FileChange[];
 }
 
@@ -73,7 +96,7 @@ function checkPath(path: unknown): string {
   if (CONTROL.test(path) || path.includes("\\")) throw new Refused(`Path is not a repository path: ${path}`, "invalid", 400);
   if (path.startsWith("/")) throw new Refused(`Paths are relative to the repository root: ${path}`, "invalid", 400);
   const segments = path.split("/");
-  if (segments.some((s) => s === "" || s === "." || s === "..")) throw new Refused(`Path is not normalised: ${path}`, "invalid", 400);
+  if (segments.some((s) => s === "" || s === "." || s === "..")) throw new Refused(`Path is not normalized: ${path}`, "invalid", 400);
   // `.git` is the repository's own machinery; a commit that rewrites it is
   // never a configuration fix.
   if (segments[0] === ".git") throw new Refused("A round may not write inside .git.", "invalid", 400);
@@ -81,7 +104,73 @@ function checkPath(path: unknown): string {
 }
 
 /**
- * Validate and normalise. Everything here is a 400 — a malformed proposal is
+ * A finding, taken only as far as it is trusted.
+ *
+ * The round assembled these from chant's JSON, so they are the shape we
+ * asked for — but they arrive over the wire from something that has spent the
+ * round reading a repository it does not control, and they end up rendered
+ * into a pull request body. So the enums are checked against the contract
+ * rather than passed through, the text is capped, and the authority URL has
+ * to be http(s) — a `javascript:` link in a markdown bullet is a small thing
+ * that would nonetheless be entirely our fault.
+ */
+function readFinding(raw: unknown, i: number): Finding {
+  const bad = (m: string): never => {
+    throw new Refused(`findings[${i}]: ${m}`, "invalid", 400);
+  };
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return bad("must be an object.");
+  const v = raw as Record<string, unknown>;
+
+  const text = (x: unknown, name: string, required: boolean): string => {
+    if (typeof x !== "string" || x === "") {
+      if (required) return bad(`${name} is required.`);
+      return "";
+    }
+    if (x.length > FINDING_LIMITS.text) return bad(`${name} is longer than ${FINDING_LIMITS.text} characters.`);
+    return x;
+  };
+  const pick = <T extends string>(x: unknown, allowed: readonly T[], name: string): T => {
+    if (typeof x !== "string" || !(allowed as readonly string[]).includes(x)) {
+      return bad(`${name} must be one of ${allowed.join(", ")}.`);
+    }
+    return x as T;
+  };
+
+  const checkId = text(v.checkId, "checkId", true);
+  if (checkId.length > FINDING_LIMITS.checkId || !/^[A-Za-z0-9_.-]+$/.test(checkId)) {
+    return bad("checkId must be a rule id like `GHA033`.");
+  }
+
+  const finding: Finding = {
+    checkId,
+    file: checkPath(v.file),
+    severity: pick(v.severity, SEVERITIES, "severity"),
+    tier: pick(v.tier, TIERS, "tier"),
+    fixKind: pick(v.fixKind, FIX_KINDS, "fixKind"),
+    category: pick(v.category, CATEGORIES, "category"),
+    title: text(v.title, "title", true),
+    message: text(v.message, "message", false),
+  };
+  const entity = text(v.entity, "entity", false);
+  if (entity) finding.entity = entity;
+  const remediation = text(v.remediation, "remediation", false);
+  if (remediation) finding.remediation = remediation;
+  const note = text(v.note, "note", false);
+  if (note) finding.note = note;
+  if (typeof v.authority === "object" && v.authority !== null && !Array.isArray(v.authority)) {
+    const a = v.authority as Record<string, unknown>;
+    const name = text(a.name, "authority.name", false);
+    if (name) {
+      finding.authority = { name };
+      const url = text(a.url, "authority.url", false);
+      if (url && /^https?:\/\//.test(url)) finding.authority.url = url;
+    }
+  }
+  return finding;
+}
+
+/**
+ * Validate and normalize. Everything here is a 400 — a malformed proposal is
  * the round's bug, not the repository's state, and telling it apart from a
  * refusal matters when the only reader is a JSON block in a reply.
  */
@@ -90,7 +179,7 @@ export function readProposal(raw: unknown): ProposeRequest {
     throw new Refused(m, "invalid", 400);
   };
   if (typeof raw !== "object" || raw === null) return bad("Send a JSON object.");
-  const { cluster, base, title, body, files } = raw as Record<string, unknown>;
+  const { cluster, base, title, findings, before, after, files } = raw as Record<string, unknown>;
 
   if (typeof cluster !== "string" || cluster.length > LIMITS.clusterLength || !CLUSTER_KEY.test(cluster)) {
     return bad("cluster must be a key like `github-workflows-ci-yml` — lowercase, digits and single hyphens.");
@@ -99,7 +188,17 @@ export function readProposal(raw: unknown): ProposeRequest {
   if (typeof title !== "string" || !title.trim() || title.length > LIMITS.title || title.includes("\n")) {
     return bad(`title must be one line of at most ${LIMITS.title} characters.`);
   }
-  if (typeof body !== "string" || body.length > LIMITS.body) return bad(`body must be a string of at most ${LIMITS.body} characters.`);
+  // The body is rendered from these, so an empty list would open a pull
+  // request that never says why it exists.
+  if (!Array.isArray(findings) || findings.length === 0) return bad("findings must list what this cluster fixes.");
+  if (findings.length > FINDING_LIMITS.perProposal) {
+    return bad(`A proposal may carry at most ${FINDING_LIMITS.perProposal} findings; this one carries ${findings.length}.`);
+  }
+  const counts = (x: unknown, name: string): number | undefined => {
+    if (x === undefined || x === null) return undefined;
+    if (typeof x !== "number" || !Number.isInteger(x) || x < 0) return bad(`${name} must be a whole number of findings.`);
+    return x;
+  };
   if (!Array.isArray(files) || files.length === 0) return bad("files must list at least one change.");
   if (files.length > LIMITS.files) return bad(`A proposal may touch at most ${LIMITS.files} files; this one touches ${files.length}.`);
 
@@ -118,7 +217,18 @@ export function readProposal(raw: unknown): ProposeRequest {
   });
   if (bytes > LIMITS.bytes) return bad(`A proposal may carry at most ${Math.floor(LIMITS.bytes / 1024)}KB of file content.`);
 
-  return { cluster, base, title: title.trim(), body, files: parsed };
+  const request: ProposeRequest = {
+    cluster,
+    base,
+    title: title.trim(),
+    findings: findings.map(readFinding),
+    files: parsed,
+  };
+  const b = counts(before, "before");
+  if (b !== undefined) request.before = b;
+  const a = counts(after, "after");
+  if (a !== undefined) request.after = a;
+  return request;
 }
 
 // ── what the round is allowed to do ────────────────────────────────────────
@@ -214,10 +324,17 @@ export async function propose(app: AppConfig, repo: string, request: ProposeRequ
   const { token } = await installationToken(app, repo, deps, WRITE);
   const commit = await commitChanges(token, repo, { base: request.base, message: request.title, files: request.files }, deps);
   await putBranch(token, repo, branch, commit, deps);
+  // The body is ours to render, from what the round reported it was fixing.
+  const body = renderBody({
+    file: request.findings[0]?.file ?? request.files[0]!.path,
+    findings: request.findings,
+    before: request.before,
+    after: request.after,
+  });
   const pr = await openPull(
     token,
     repo,
-    { title: request.title, body: bodyWithMarker(request.body, request.cluster), head: branch, base: state.defaultBranch },
+    { title: request.title, body: bodyWithMarker(body, request.cluster), head: branch, base: state.defaultBranch },
     deps,
   );
   return { ...pr, branch, commit };

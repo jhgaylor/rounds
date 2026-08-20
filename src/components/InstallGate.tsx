@@ -6,7 +6,7 @@
  * reason this component has to be loud. With no App there is no credential
  * anywhere that can open a pull request, so "not installed yet" is a hard stop
  * and needs to look like one rather than being discovered halfway through an
- * enrolment.
+ * enrollment.
  *
  * Three states, in the order a person meets them: sign in, install, ready.
  */
@@ -24,7 +24,7 @@ export function InstallGate(props: {
   onRecheck: () => void;
 }) {
   // Nothing is configured server-side. Not the person's problem to fix, but
-  // saying so beats an enrol button that fails for no visible reason.
+  // saying so beats an enroll button that fails for no visible reason.
   if (props.appInfo && !props.appInfo.configured) {
     return (
       <div className="tokenrow warn">
@@ -44,8 +44,8 @@ export function InstallGate(props: {
       <div className="tokenrow warn">
         <span className="dot warnDot" />
         <span className="fineprint">
-          Sign in with GitHub to enrol a repository. Rounds never stores a GitHub token: each repository's agent carries
-          a signed authorisation instead, trades it for a read-only token each round, and the pull requests are opened
+          Sign in with GitHub to enroll a repository. Rounds never stores a GitHub token: each repository's agent carries
+          a signed authorization instead, trades it for a read-only token each round, and the pull requests are opened
           by this server.
         </span>
         <button className="primary" onClick={props.onSignIn}>
@@ -92,8 +92,8 @@ export function InstallGate(props: {
     <div className="tokenrow ok">
       <span className="dot on" />
       <span className="fineprint">
-        Signed in as <b>{props.auth.login}</b>, with the App installed. A repository you enrol gets its own signed
-        authorisation — no GitHub token is stored, and the agent that audits it cannot write anywhere.{" "}
+        Signed in as <b>{props.auth.login}</b>, with the App installed. A repository you enroll gets its own signed
+        authorization — no GitHub token is stored, and the agent that audits it cannot write anywhere.{" "}
         <a href={props.appInfo.installUrl ?? "#"} target="_blank" rel="noreferrer">
           add or remove repositories
         </a>

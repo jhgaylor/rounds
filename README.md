@@ -2,7 +2,7 @@
 
 **Dependabot, for the configuration rather than the dependencies.**
 
-Enrol a repository — public or private — and
+Enroll a repository — public or private — and
 [`chant audit`](https://intentius.io/chant/cli/audit/) runs over its CI
 workflows, Kubernetes manifests, Dockerfiles, Helm charts and cloud templates on
 a schedule. When it finds something worth a pull request, an
@@ -23,18 +23,21 @@ opposite defaults, because nobody is watching when it runs.
    - one you **closed unmerged** → that is a no; never propose it again
    - one that merged and the finding came back → treat it as new
 5. **Fix and verify.** Apply chant's deterministic diffs; for guidance findings,
-   make the change only when confident it preserves behaviour. Then re-run the
+   make the change only when confident it preserves behavior. Then re-run the
    audit — the findings must be gone, the merge-worthy count must not have gone
    up, and every touched file must still parse. **If verification fails it
    abandons the cluster and opens nothing.**
-6. **Propose one pull request per file** — the agent sends the fixed files to
-   this app's server, which checks them against the repo's policy and its own
-   history and opens the pull request. The agent cannot push; see
+6. **Propose one pull request per file** — the agent sends the fixed files and
+   the findings they fix to this app's server, which checks them against the
+   repo's policy and its own history, **writes the pull request body from the
+   findings**, and opens it. The agent cannot push; see
    [The credential](#the-credential).
-7. **Report** a `round` block, which is what this app renders.
+7. **Report** a `round` block and a `round-diff` per cluster it changed
+   something for, which is what this app renders. See
+   [What comes back](#what-comes-back).
 
 State lives in GitHub, not in a database: the branch name (`rounds/<file-key>`)
-plus a marker in the PR body are how a later round recognises its own work. That
+plus a marker in the PR body are how a later round recognizes its own work. That
 is Dependabot's trick and it means nothing to keep in sync. Both are written by
 the server, so neither can be forgotten or forged by a round.
 
@@ -60,9 +63,40 @@ A refusal is not a failure. The round records it against the cluster —
 `already-open`, `declined`, `deferred` — and moves on, which is exactly what
 the app renders.
 
+## What comes back
+
+A round reports two things, and the split is deliberate.
+
+The **`round` block** carries the audit — every finding chant produced,
+report-only tier included — alongside what became of each cluster. The
+**`round-diff` fences** carry the patches, one per cluster keyed by cluster
+key, raw rather than escaped into JSON so a stray newline cannot take the whole
+report down with it.
+
+Only clusters the round *changed a file for* send a diff: `opened`, `failed`,
+`deferred`. An `opened` cluster's diff is on GitHub anyway — but a `failed` or
+`deferred` one **exists nowhere else**. The server never saw it, because it
+never became a pull request. That is the diff somebody actually wants, and the
+round is the only thing that has it.
+
+`already-open`, `declined` and `clean` send nothing: the first is on GitHub and
+the other two changed nothing, and a round that resent the same patch every
+week would make the history unreadable.
+
+The app joins the two back together — findings to cluster to diff to pull
+request — and shows one row per file: what chant flagged, what the agent
+changed, and where it ended up.
+
+**The pull request body is not written by the agent.** It sends `findings`, and
+`server/prbody.ts` renders the markdown. Those are the same objects that go
+into the round block, so what the pull request claims and what the app shows
+cannot disagree — not because the agent was careful, but because there is only
+one copy. The agent writes two things: the title, and a one-line `note` per
+finding saying what it changed.
+
 By default it only auto-opens the **mechanical** tier — chant's deterministic
 findings, where the fix is known rather than judged. Tick *"also propose the
-judgement calls"* when enrolling (or set `tiers` in `.rounds.yml`) to let the
+judgment calls"* when enrolling (or set `tiers` in `.rounds.yml`) to let the
 agent take on the guidance findings too. That is the more valuable half and the
 half that needs review, which is exactly why it is opt-in.
 
@@ -86,7 +120,7 @@ bun run dev        # http://localhost:5181
 ```
 
 Sign in with Fountain (or paste an API key), sign in with GitHub, install the
-App, then enrol a repo and pick a cadence. Server-side requirements, same as any
+App, then enroll a repo and pick a cadence. Server-side requirements, same as any
 external Fountain client:
 
 ```
@@ -102,7 +136,7 @@ the shape of it is the point:
 
 | who | holds | can |
 |---|---|---|
-| the repo's agent | a **grant** in its own vault — a signed note that you authorised work on that repo, not a GitHub credential | trade it for a **read-only** token: clone, and nothing else |
+| the repo's agent | a **grant** in its own vault — a signed note that you authorized work on that repo, not a GitHub credential | trade it for a **read-only** token: clone, and nothing else |
 | this app's server | the GitHub App's private key | mint a write token, for one repository, for the length of one proposal |
 
 The agent spends its round reading configuration files out of a repository
@@ -145,10 +179,10 @@ POST /gh/installations  where you have the App installed — the gate on enrolli
 POST /gh/grant          mints a grant, after checking you can push there
 POST /gh/token          trades a grant for a one-hour, one-repo, READ-ONLY token
 POST /gh/state          what a round needs before it decides: HEAD, policy, its own past PRs
-POST /gh/propose        the only path that writes
+POST /gh/propose        the only path that writes — takes findings, renders the body
 ```
 
-Everything a round calls is authorised by its grant, and the repository is read
+Everything a round calls is authorized by its grant, and the repository is read
 off the grant's **signature** — never off the request. A round that asked to
 propose against another repository would be asking with a grant that does not
 say so, and would be refused before GitHub was called at all.
@@ -162,7 +196,7 @@ no fallback any more, by design.
 ## Development
 
 ```bash
-bun test           # grants, propose enforcement, .rounds.yml, cron, protocol, hosts, ACP, SSE, render
+bun test           # grants, propose enforcement, findings, PR body, .rounds.yml, cron, protocol, diffs, hosts, ACP, SSE, render
 bun run typecheck
 bun run build
 ```
@@ -171,7 +205,9 @@ To work without a live Fountain, run the mock (`bun run mock`), start the app
 with `FOUNTAIN_PROXY=http://localhost:8790 bun run dev`, and use
 `http://localhost:5181` as the Fountain URL with any string as the key. It
 serves one enrolled repo with three rounds behind it, covering every cluster
-status the UI renders. The `/gh` endpoints need a real GitHub App, so enrolling
+status the UI renders, with findings and diffs on each — including a held-back
+cluster and a failed one, whose diffs exist nowhere but the round that reported
+them. The `/gh` endpoints need a real GitHub App, so enrolling
 against the mock stops at the install gate.
 
 No state outside the browser: settings in `localStorage` (`rounds.settings`).

@@ -21,7 +21,7 @@ export class SseParser {
   push(chunk: string): SseMessage[] {
     this.buffer += chunk;
     const out: SseMessage[] = [];
-    // A record ends at a blank line. Normalise CRLF first.
+    // A record ends at a blank line. Normalize CRLF first.
     let idx: number;
     while ((idx = this.buffer.indexOf("\n\n")) !== -1) {
       const raw = this.buffer.slice(0, idx);

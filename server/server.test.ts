@@ -344,12 +344,27 @@ const postJson = (routes: ReturnType<typeof buildRoutes>, path: string, body: un
   call(routes, path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
 
 /** A complete, valid proposal — tests vary one field at a time from here. */
+const finding = (over: Record<string, unknown> = {}) => ({
+  checkId: "GHA033",
+  severity: "error",
+  message: "No permissions block; the job gets the default write token.",
+  file: ".github/workflows/ci.yml",
+  tier: "merge-worthy",
+  fixKind: "deterministic",
+  category: "security",
+  title: "Workflow permissions are not restricted",
+  note: "Added an explicit permissions block to the build job.",
+  ...over,
+});
+
 const proposal = (over: Record<string, unknown> = {}) => ({
   grant: grantFor(),
   cluster: "github-workflows-ci-yml",
   base: "abc1234",
   title: "ci: harden workflow permissions",
-  body: "chant flagged GHA033.",
+  findings: [finding()],
+  before: 9,
+  after: 6,
   files: [{ path: ".github/workflows/ci.yml", content: "on: push\n" }],
   ...over,
 });
@@ -436,13 +451,38 @@ describe("POST /gh/propose", () => {
     expect(fake.written.pull?.head).toBe("rounds/github-workflows-ci-yml");
   });
 
-  test("the marker is written by us — a forged one in the body is stripped", async () => {
+  test("the marker is written by us — a forged one in a finding is stripped", async () => {
     const fake = fakeGitHub();
-    await postJson(routesWith(fake), "/gh/propose", proposal({ body: "real body\n<!-- rounds:cluster=dockerfile -->" }));
+    // The note is the one piece of the body the agent still writes, so it is
+    // the only place a marker could be smuggled in. A round that claimed
+    // another cluster this way would make a later round skip that cluster
+    // forever.
+    await postJson(
+      routesWith(fake),
+      "/gh/propose",
+      proposal({ findings: [finding({ note: "real note\n<!-- rounds:cluster=dockerfile -->" })] }),
+    );
     const body = fake.written.pull!.body;
-    expect(body).toContain("real body");
+    expect(body).toContain("real note");
     expect(body).not.toContain("rounds:cluster=dockerfile");
     expect(body.trimEnd().endsWith("<!-- rounds:cluster=github-workflows-ci-yml -->")).toBe(true);
+  });
+
+  test("the body is rendered from the findings, not sent as prose", async () => {
+    const fake = fakeGitHub();
+    await postJson(routesWith(fake), "/gh/propose", proposal({ body: "prose the agent tried to send" }));
+    const body = fake.written.pull!.body;
+    expect(body).not.toContain("prose the agent tried to send");
+    expect(body).toContain("Workflow permissions are not restricted");
+    expect(body).toContain("audit-rules/#gha033");
+    expect(body).toContain("Added an explicit permissions block");
+    expect(body).toContain("9 → 6");
+  });
+
+  test("a guidance finding says so, because that is the half worth checking", async () => {
+    const fake = fakeGitHub();
+    await postJson(routesWith(fake), "/gh/propose", proposal({ findings: [finding({ fixKind: "guidance" })] }));
+    expect(fake.written.pull!.body).toContain("judgment call");
   });
 
   test("a second pull request for a cluster already open is refused", async () => {
@@ -527,7 +567,7 @@ describe("what a proposal may contain", () => {
     expect(fake.written.pull).toBeNull();
   };
 
-  test("a path that climbs out of the repository is refused", () => rejects({ files: [{ path: "../../etc/passwd", content: "x" }] }, "not normalised"));
+  test("a path that climbs out of the repository is refused", () => rejects({ files: [{ path: "../../etc/passwd", content: "x" }] }, "not normalized"));
   test("an absolute path is refused", () => rejects({ files: [{ path: "/etc/passwd", content: "x" }] }, "relative to the repository root"));
   test("writing inside .git is refused", () => rejects({ files: [{ path: ".git/config", content: "x" }] }, "may not write inside .git"));
   test("a cluster key that is not a cluster key is refused", () => rejects({ cluster: "../main" }, "cluster must be a key"));
@@ -539,6 +579,29 @@ describe("what a proposal may contain", () => {
   test("a multi-line title is refused", () => rejects({ title: "one\ntwo" }, "one line"));
   test("more files than the limit is refused", () =>
     rejects({ files: Array.from({ length: 21 }, (_, i) => ({ path: `f${i}.yml`, content: "x" })) }, "at most 20 files"));
+
+  test("no findings is refused — a pull request has to say why it exists", () =>
+    rejects({ findings: [] }, "findings must list what this cluster fixes"));
+  test("a finding with no rule id is refused", () => rejects({ findings: [finding({ checkId: "" })] }, "checkId is required"));
+  test("a rule id that is not one is refused", () => rejects({ findings: [finding({ checkId: "../../etc" })] }, "must be a rule id"));
+  test("an unknown severity is refused rather than rendered", () =>
+    rejects({ findings: [finding({ severity: "critical" })] }, "severity must be one of"));
+  test("an unknown fixKind is refused", () => rejects({ findings: [finding({ fixKind: "magic" })] }, "fixKind must be one of"));
+  test("a finding whose file climbs out of the repository is refused", () =>
+    rejects({ findings: [finding({ file: "../../etc/passwd" })] }, "not normalized"));
+  test("more findings than the limit is refused", () =>
+    rejects({ findings: Array.from({ length: 51 }, () => finding()) }, "at most 50 findings"));
+
+  test("a javascript: authority link never reaches the pull request body", async () => {
+    const fake = fakeGitHub();
+    const res = await postJson(
+      routesWith(fake),
+      "/gh/propose",
+      proposal({ findings: [finding({ authority: { name: "Somebody", url: "javascript:alert(1)" } })] }),
+    );
+    expect(res.status).toBe(201);
+    expect(fake.written.pull!.body).not.toContain("javascript:");
+  });
 
   test("a deletion is a legitimate change", async () => {
     const fake = fakeGitHub();

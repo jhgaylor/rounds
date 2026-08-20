@@ -86,7 +86,7 @@ export function buildRoutes(config: Config, deps: Deps = {}): Routes {
     }
     const app = config.app;
 
-    /** Every round-facing route is authorised by a grant, and by nothing else. */
+    /** Every round-facing route is authorized by a grant, and by nothing else. */
     const grantFrom = (body: Record<string, unknown>): Grant => {
       if (!config.grantSecret) throw new Refused("Grants are not enabled on this deployment.", "invalid", 503);
       const grant = readGrant(typeof body.grant === "string" ? body.grant : undefined, config.grantSecret);
@@ -109,7 +109,7 @@ export function buildRoutes(config: Config, deps: Deps = {}): Routes {
       if (url.pathname === "/gh/installations" && req.method === "POST") {
         // The step between signing in and enrolling: the App has to be on the
         // account before a grant can mean anything. Answering this lets the UI
-        // say so up front instead of failing halfway through an enrolment.
+        // say so up front instead of failing halfway through an enrollment.
         const body = await readBody(req);
         if (typeof body.token !== "string") return json(req, { error: "Send {token}." }, 400);
         const installations = await userInstallations(body.token, deps);

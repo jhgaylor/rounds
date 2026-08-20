@@ -102,7 +102,7 @@ export function App() {
       // Coming back from installing the App. Nothing to exchange — the fact
       // that we are here is the signal, and the install check will confirm it.
       const setup = takeInstallCallback();
-      if (setup) say(setup.action === "install" ? "App installed. Enrol a repository." : "App permissions updated.");
+      if (setup) say(setup.action === "install" ? "App installed. Enroll a repository." : "App permissions updated.");
 
       // Both OAuth flows land here as ?code=…; each claims only the callback
       // whose state it stashed, so this cannot swallow Fountain's.
@@ -222,7 +222,7 @@ export function App() {
   /**
    * Bring an already-enrolled agent's prompt up to date.
    *
-   * The prompt is baked in at enrolment and there was no path to change it
+   * The prompt is baked in at enrollment and there was no path to change it
    * afterwards — enrolling a repo that is already on the team just selects it.
    * That was survivable while prompt changes were cosmetic. It is not now: an
    * agent still carrying the old prompt would trade its grant for a read-only
@@ -447,7 +447,7 @@ export function App() {
       try {
         const environmentId = await ensureEnvironment();
         // The grant is the whole credential story. It proves a person who can
-        // push here authorised the work; it is not a GitHub token, and the
+        // push here authorized the work; it is not a GitHub token, and the
         // server checks both facts before issuing it.
         let vaultId: string | undefined;
         try {
@@ -694,7 +694,7 @@ export function App() {
                 Your infrastructure config, kept up to standard — on a <b>schedule</b>.
               </h1>
               <p>
-                <a href="https://intentius.io/chant/cli/audit/">chant</a> audits the repositories you enrol — CI
+                <a href="https://intentius.io/chant/cli/audit/">chant</a> audits the repositories you enroll — CI
                 workflows, Kubernetes manifests, Dockerfiles, Helm charts, cloud templates — and a pull request goes up
                 for what an agent can fix and verify. One PR per file, never a second for something you already have
                 open, and never again for one you closed.
@@ -730,17 +730,17 @@ export function App() {
 function EnrollForm(props: {
   onEnroll: (repo: string, cron: string, policy: RoundsPolicy) => void;
   disabled: boolean;
-  /** Signed in, App installed. Without it there is nothing to enrol with. */
+  /** Signed in, App installed. Without it there is nothing to enroll with. */
   ready: boolean;
   big?: boolean;
 }) {
   const [value, setValue] = useState("");
   const [cron, setCron] = useState(DEFAULT_CRON);
-  const [judgement, setJudgement] = useState(false);
+  const [judgment, setJudgment] = useState(false);
   const submit = (e: FormEvent) => {
     e.preventDefault();
     if (!value.trim()) return;
-    props.onEnroll(value.trim(), cron, { ...DEFAULT_POLICY, includeNeedsReview: judgement });
+    props.onEnroll(value.trim(), cron, { ...DEFAULT_POLICY, includeNeedsReview: judgment });
     setValue("");
   };
   const blocked = props.disabled || !props.ready;
@@ -762,19 +762,19 @@ function EnrollForm(props: {
           ))}
         </select>
         <button type="submit" className="primary" disabled={blocked || !value.trim()}>
-          {props.disabled ? "…" : "Enrol"}
+          {props.disabled ? "…" : "Enroll"}
         </button>
       </div>
-      <label className="judgement">
-        <input type="checkbox" checked={judgement} onChange={(e) => setJudgement(e.target.checked)} disabled={blocked} />
+      <label className="judgment">
+        <input type="checkbox" checked={judgment} onChange={(e) => setJudgment(e.target.checked)} disabled={blocked} />
         <span>
-          Also propose the judgement calls — chant's guidance findings, fixed by the agent rather than only the
+          Also propose the judgment calls — chant's guidance findings, fixed by the agent rather than only the
           mechanical ones. More value, more to review.
         </span>
       </label>
       <p className="fineprint">
         The repository has to be one the App is installed on, and one you can push to — the server checks both before it
-        will enrol it.
+        will enroll it.
       </p>
     </form>
   );

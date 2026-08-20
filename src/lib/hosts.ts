@@ -47,7 +47,7 @@ export function authedCloneUrl(r: RepoRef, tokenVar = "$GITHUB_TOKEN"): string {
 /**
  * `owner/name` (GitHub), `host/owner/name`, or a full https URL on one of
  * the three hosts (with or without .git / a trailing path) → a RepoRef.
- * Null when it is not recognisably a repo on a supported host.
+ * Null when it is not recognizably a repo on a supported host.
  */
 export function parseRepoInput(input: string): RepoRef | null {
   let s = input.trim();

@@ -35,7 +35,7 @@ export const TOTAL = FAMILIES.reduce((n, f) => n + f.rules, 0);
  * a landing page whose arithmetic has quietly rotted is worse than one with no
  * numbers on it. A test pins the sum.
  */
-export const TIERS = { mechanical: 6, judgement: 153, hygiene: 85 } as const;
+export const TIERS = { mechanical: 6, judgment: 153, hygiene: 85 } as const;
 
 export function Landing(props: { error: string | null; onPaste: (s: Settings) => void }) {
   return (
@@ -61,7 +61,7 @@ export function Landing(props: { error: string | null; onPaste: (s: Settings) =>
         <p className="lp-lede">
           Your CI workflows, Kubernetes manifests, Dockerfiles, Helm charts and cloud templates drift the same way
           dependencies do — a workflow pinned to a tag, a container still running as root, a bucket that quietly went
-          public. Nobody gets a pull request about it. Rounds enrols a repository, audits it on a schedule with{" "}
+          public. Nobody gets a pull request about it. Rounds enrolls a repository, audits it on a schedule with{" "}
           <a href="https://intentius.io/chant/cli/audit/">chant</a>, fixes what it can prove it fixed, and opens the
           pull request.
         </p>
@@ -112,7 +112,7 @@ export function Landing(props: { error: string | null; onPaste: (s: Settings) =>
             <h3>Mechanical</h3>
             <p>
               chant knows the exact edit and produces the diff itself — pin an action to a commit SHA, pin an image to
-              a digest, replace <code>write-all</code> with a least-privilege block. There is no judgement involved,
+              a digest, replace <code>write-all</code> with a least-privilege block. There is no judgment involved,
               so the agent applies the diff it was handed and nothing else.
             </p>
             <pre className="lp-diff">
@@ -133,13 +133,13 @@ export function Landing(props: { error: string | null; onPaste: (s: Settings) =>
           <div className="lp-tier opt">
             <div className="lp-tierhead">
               <span className="lp-pill">one checkbox away</span>
-              <span className="lp-tiern">{TIERS.judgement} rules</span>
+              <span className="lp-tiern">{TIERS.judgment} rules</span>
             </div>
-            <h3>Judgement calls</h3>
+            <h3>Judgment calls</h3>
             <p>
               Worth a pull request, but the fix depends on what you meant — a container that may run as root, a{" "}
               <code>pull_request_target</code> that checks out untrusted code, a Cloud SQL instance open to the world.
-              Tick <i>also propose the judgement calls</i> when you enrol and the agent makes the change itself, then
+              Tick <i>also propose the judgment calls</i> when you enroll and the agent makes the change itself, then
               re-runs the audit to prove the finding is gone and nothing new appeared. If it cannot verify it, it
               abandons the change and tells you why rather than opening it.
             </p>
@@ -199,7 +199,7 @@ export function Landing(props: { error: string | null; onPaste: (s: Settings) =>
           <div className="lp-card">
             <h3>What the agent holds</h3>
             <p>
-              A signed note saying you authorised work on one repository. It is not a GitHub credential — on its own
+              A signed note saying you authorized work on one repository. It is not a GitHub credential — on its own
               it opens nothing. Each round it buys a token that <b>can only read</b>, lasts an hour, and reaches
               exactly one repository.
             </p>

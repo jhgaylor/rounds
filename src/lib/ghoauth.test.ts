@@ -69,7 +69,7 @@ describe("isGithubCallback", () => {
 describe("the install callback", () => {
   beforeEach(() => browserAt(""));
 
-  test("is recognised on the way back from GitHub", () => {
+  test("is recognized on the way back from GitHub", () => {
     browserAt("?installation_id=42&setup_action=install");
     expect(isInstallCallback()).toBe(true);
     expect(takeInstallCallback()).toEqual({ installationId: "42", action: "install" });

@@ -1,7 +1,7 @@
 /**
  * `.rounds.yml` — the audited repository's own policy, parsed here.
  *
- * It used to be the agent's job to read this file and honour it, which made
+ * It used to be the agent's job to read this file and honor it, which made
  * the repo's policy advisory: a round that misread the file, or was talked out
  * of it by something else in the repository, simply did the wrong thing and
  * nobody was watching. Now the server reads it, enforces the two keys that are
@@ -10,7 +10,7 @@
  *
  * Deliberately a small hand-rolled subset rather than a YAML dependency: the
  * file is five flat keys, and anything it does not understand it ignores,
- * which is the documented behaviour.
+ * which is the documented behavior.
  */
 
 export interface Policy {

@@ -9,7 +9,7 @@
  * The complication worth naming: Rounds already completes a *Fountain* OAuth
  * callback on this same URL, and both arrive as `?code=…&state=…`. So each
  * flow stashes its own state under its own key and only claims a callback
- * whose state it recognises. Whichever one stashed the state gets the code;
+ * whose state it recognizes. Whichever one stashed the state gets the code;
  * the other leaves it alone.
  */
 
@@ -48,7 +48,7 @@ export function beginGithubLogin(clientId: string): void {
  * `installation_id` and `setup_action` and nothing ever looked at them, so the
  * step between signing in and enrolling had no completion at all — you found
  * out whether the App was installed when a grant request 404'd halfway through
- * an enrolment.
+ * an enrollment.
  */
 export function isInstallCallback(): boolean {
   const params = new URLSearchParams(window.location.search);

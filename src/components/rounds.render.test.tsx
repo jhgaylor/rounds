@@ -7,7 +7,28 @@ import { FAMILIES, Landing, TIERS, TOTAL } from "./Landing";
 
 const REPO = { host: "github.com", owner: "o", name: "r" } as const;
 
-const block = (body: unknown, prose = "Did a round.") => `${prose}\n\n\`\`\`round\n${JSON.stringify(body)}\n\`\`\``;
+const block = (body: unknown, prose = "Did a round.", diffs: Record<string, string> = {}) => {
+  const fences = Object.entries(diffs)
+    .map(([cluster, diff]) => `\n\n\`\`\`round-diff ${cluster}\n${diff}\n\`\`\``)
+    .join("");
+  return `${prose}\n\n\`\`\`round\n${JSON.stringify(body)}\n\`\`\`${fences}`;
+};
+
+const K8S_DIFF = `diff --git a/k8s/deployment.yaml b/k8s/deployment.yaml
+--- a/k8s/deployment.yaml
++++ b/k8s/deployment.yaml
+@@ -14,6 +14,8 @@ spec:
+         - name: web
++          securityContext:
++            runAsNonRoot: true
+           ports:`;
+
+const HELM_DIFF = `diff --git a/charts/web/templates/deployment.yaml b/charts/web/templates/deployment.yaml
+--- a/charts/web/templates/deployment.yaml
++++ b/charts/web/templates/deployment.yaml
+@@ -22,7 +22,7 @@ spec:
+-              value: {{ .Values.apiKey }}
++              valueFrom:`;
 
 const LATEST = block(
   {
@@ -16,6 +37,62 @@ const LATEST = block(
     branch: "main",
     scanned: 19,
     summary: { total: 9, quickWin: 2, needsReview: 5, reportOnly: 2 },
+    findings: [
+      {
+        checkId: "WK8203",
+        severity: "error",
+        message: "No securityContext; the container runs as uid 0.",
+        file: "k8s/deployment.yaml",
+        entity: "Deployment/web",
+        tier: "merge-worthy",
+        fixKind: "guidance",
+        category: "security",
+        title: "Container runs as root",
+        remediation: "Set runAsNonRoot and a non-zero runAsUser.",
+        note: "Added a securityContext running the container as uid 10001.",
+      },
+      {
+        checkId: "GHA033",
+        severity: "error",
+        message: "No permissions block.",
+        file: ".github/workflows/ci.yml",
+        tier: "merge-worthy",
+        fixKind: "deterministic",
+        category: "security",
+        title: "Workflow permissions are not restricted",
+      },
+      {
+        checkId: "WHM004",
+        severity: "warning",
+        message: "The chart inlines a Secret.",
+        file: "charts/web/templates/deployment.yaml",
+        tier: "merge-worthy",
+        fixKind: "guidance",
+        category: "security",
+        title: "Secret inlined into a template",
+      },
+      {
+        checkId: "DKRD012",
+        severity: "warning",
+        message: "Base image is a mutable tag.",
+        file: "Dockerfile",
+        tier: "merge-worthy",
+        fixKind: "deterministic",
+        category: "correctness",
+        title: "Base image is not pinned to a digest",
+      },
+      {
+        checkId: "GHA104",
+        severity: "info",
+        message: "No timeout-minutes on the build job.",
+        file: ".github/workflows/ci.yml",
+        tier: "report-only",
+        fixKind: "guidance",
+        category: "best-practice",
+        title: "Job has no timeout",
+      },
+    ],
+    omitted: 3,
     clusters: [
       { key: "k8s", file: "k8s/deployment.yaml", status: "opened", pr: 44, url: "https://github.com/o/r/pull/44", checkIds: ["WK8203"], title: "k8s: run as non-root" },
       { key: "ci", file: ".github/workflows/ci.yml", status: "declined", pr: 38, checkIds: ["GHA033"], note: "closed unmerged — not raising it again" },
@@ -26,6 +103,7 @@ const LATEST = block(
     error: null,
   },
   "Opened one, left the rest.",
+  { k8s: K8S_DIFF, helm: HELM_DIFF },
 );
 
 const EARLIER = block({ summary: { total: 11 }, clusters: [], openPrs: 0 }, "Quiet week.");
@@ -64,6 +142,43 @@ describe("RoundView", () => {
   test("earlier rounds are counted and folded away", () => {
     expect(html).toContain("Earlier rounds — 1");
     expect(html).not.toContain("Quiet week.");
+  });
+
+  test("the findings are on the page, not only their rule ids", () => {
+    expect(html).toContain("Container runs as root");
+    expect(html).toContain("Deployment/web");
+  });
+
+  test("what the agent changed wins over what chant advises, when it changed something", () => {
+    expect(html).toContain("Added a securityContext running the container as uid 10001.");
+    expect(html).not.toContain("Set runAsNonRoot and a non-zero runAsUser.");
+  });
+
+  test("a judgment call is marked as one — it is the half that needs reading", () => {
+    expect(html).toContain("judgment call");
+  });
+
+  test("the report-only tier is present but folded away", () => {
+    expect(html).toContain("Noted, not proposed — 1");
+    expect(html).not.toContain("Job has no timeout");
+  });
+
+  test("findings the round left out are still accounted for", () => {
+    expect(html).toContain("3 further findings not listed");
+  });
+
+  test("a cluster that changed a file offers its diff", () => {
+    // Both the opened one and the failed one: the failed cluster's diff never
+    // reached GitHub, so this is the only place it can be seen at all.
+    expect(html.match(/See the change/g)).toHaveLength(2);
+    expect(html).toContain("+2");
+  });
+
+  test("a cluster the round did nothing for offers no diff to see", () => {
+    const quiet = foldRounds([
+      { reply: block({ summary: { total: 1 }, findings: [], clusters: [{ key: "a", file: "a.yml", status: "clean", checkIds: [] }], openPrs: 0 }) },
+    ]);
+    expect(renderToString(<RoundView entries={quiet} repo={REPO} running={false} />)).not.toContain("See the change");
   });
 
   test("a repo with no rounds yet says what happens next", () => {
@@ -131,7 +246,7 @@ describe("Landing", () => {
   const html = renderToString(<Landing error={null} onPaste={() => {}} />);
 
   test("the tiers account for every rule, with none double-counted", () => {
-    expect(TIERS.mechanical + TIERS.judgement + TIERS.hygiene).toBe(TOTAL);
+    expect(TIERS.mechanical + TIERS.judgment + TIERS.hygiene).toBe(TOTAL);
     expect(TOTAL).toBe(244);
   });
 
@@ -150,7 +265,7 @@ describe("Landing", () => {
   test("it is honest that most findings are not auto-opened", () => {
     // The mechanical tier is small; claiming otherwise would be the easiest
     // and worst lie on this page.
-    expect(TIERS.mechanical).toBeLessThan(TIERS.judgement);
+    expect(TIERS.mechanical).toBeLessThan(TIERS.judgment);
     expect(html).toContain("on by default");
     expect(html).toContain("one checkbox away");
     expect(html).toContain("never");

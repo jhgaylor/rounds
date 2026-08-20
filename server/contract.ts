@@ -20,7 +20,7 @@ export const PR_MARKER = "rounds:cluster=";
  * A cluster key: a file path lowercased with every run of non-alphanumeric
  * characters collapsed to a hyphen. `.github/workflows/ci.yml` →
  * `github-workflows-ci-yml`. Stable across rounds, which is the only reason
- * a round can recognise what it already proposed.
+ * a round can recognize what it already proposed.
  */
 export function clusterKey(path: string): string {
   return path.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
@@ -48,4 +48,62 @@ export const LIMITS = {
   clusterLength: 120,
   title: 120,
   body: 60_000,
+} as const;
+
+// ── the findings a round reports ───────────────────────────────────────────
+
+/**
+ * One chant finding, as both halves of the app see it.
+ *
+ * It lives in the contract rather than in the browser's `protocol.ts` because
+ * the server now renders the pull request body from these — so the thing the
+ * maintainer reads on GitHub and the thing the UI shows are the same objects,
+ * and cannot drift into disagreeing about what was fixed.
+ *
+ * Everything except `note` is chant's own output. `note` is the agent's
+ * sentence about what it changed and why, which is the one part of a rounds
+ * pull request that is written rather than derived.
+ */
+export type Severity = "error" | "warning" | "info";
+export type Tier = "merge-worthy" | "report-only";
+export type FixKind = "deterministic" | "guidance";
+export type Category = "security" | "correctness" | "best-practice";
+
+export interface Authority {
+  name: string;
+  url?: string;
+}
+
+export interface Finding {
+  checkId: string;
+  severity: Severity;
+  message: string;
+  file: string;
+  entity?: string;
+  tier: Tier;
+  fixKind: FixKind;
+  category: Category;
+  title: string;
+  /** chant's advice — what a person should do about it. */
+  remediation?: string;
+  authority?: Authority;
+  /** The agent's own line: what it changed here, and why. */
+  note?: string;
+}
+
+export const SEVERITIES: readonly Severity[] = ["error", "warning", "info"];
+export const TIERS: readonly Tier[] = ["merge-worthy", "report-only"];
+export const FIX_KINDS: readonly FixKind[] = ["deterministic", "guidance"];
+export const CATEGORIES: readonly Category[] = ["security", "correctness", "best-practice"];
+
+/** The reference entry for a rule id — the same scheme the CLI report uses. */
+export function ruleDocUrl(id: string): string {
+  return `https://intentius.io/chant/lint-rules/audit-rules/#${id.toLowerCase()}`;
+}
+
+/** What a proposal's findings may be. A cluster is one file, so this is roomy. */
+export const FINDING_LIMITS = {
+  perProposal: 50,
+  checkId: 64,
+  text: 2000,
 } as const;
