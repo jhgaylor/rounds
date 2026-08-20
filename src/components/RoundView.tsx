@@ -17,7 +17,7 @@ const STATUS: Record<ClusterStatus, { label: string; tone: string; blurb: string
   "already-open": { label: "already open", tone: "brand", blurb: "proposed in an earlier round, still waiting on you" },
   declined: { label: "declined", tone: "mute", blurb: "you closed this one — it will never be raised again" },
   deferred: { label: "held back", tone: "warn", blurb: "kept back to stay under the open pull request cap" },
-  failed: { label: "failed", tone: "danger", blurb: "it could not verify or push the fix, so it opened nothing" },
+  failed: { label: "failed", tone: "danger", blurb: "it could not verify the fix, or the server refused it, so nothing went up" },
   clean: { label: "no action", tone: "mute", blurb: "considered, nothing to do" },
 };
 

@@ -14,7 +14,15 @@ import { blocksForTurn } from "./lib/acp";
 import { cronError, describeCron, relativeTime } from "./lib/cron";
 import { parseRepoInput, refKey, refLabel, repoUrl, type RepoRef } from "./lib/hosts";
 import { clearGhAuth, loadGhAuth, saveGhAuth, type GhAuth } from "./lib/ghauth";
-import { beginGithubLogin, completeGithubLoginIfCallback, fetchAppInfo, isGithubCallback, type AppInfo } from "./lib/ghoauth";
+import {
+  beginGithubLogin,
+  completeGithubLoginIfCallback,
+  fetchAppInfo,
+  fetchInstallations,
+  isGithubCallback,
+  takeInstallCallback,
+  type AppInfo,
+} from "./lib/ghoauth";
 import { completeLoginIfCallback, revoke } from "./lib/oauth";
 import { foldRounds, type RoundEntry } from "./lib/protocol";
 import { clearSettings, loadSettings, saveSettings, type Settings } from "./lib/settings";
@@ -31,14 +39,13 @@ import {
   ROUND_PROMPT,
   scheduleName,
   systemPrompt,
-  TOKEN_KEY,
   vaultDescription,
   vaultName,
   type RoundsPolicy,
 } from "./lib/spec";
 import { Connect } from "./components/Connect";
+import { InstallGate } from "./components/InstallGate";
 import { RoundView } from "./components/RoundView";
-import { TokenGate } from "./components/TokenGate";
 
 const STREAMS = ["acp", "stdout", "stage"];
 const DEFAULT_MODEL = "anthropic/claude-sonnet-5";
@@ -67,8 +74,10 @@ export function App() {
   const [adding, setAdding] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [envId, setEnvId] = useState<string | null>(null);
-  const [tokenPresent, setTokenPresent] = useState<boolean | null>(null);
-  const [savingToken, setSavingToken] = useState(false);
+  // Whether the App is installed anywhere. There is no longer a token to fall
+  // back to, so this is the gate on enrolling at all.
+  const [installed, setInstalled] = useState<boolean | null>(null);
+  const [checkingInstall, setCheckingInstall] = useState(false);
   const [ghAuth, setGhAuth] = useState<GhAuth | null>(() => loadGhAuth());
   const [appInfo, setAppInfo] = useState<AppInfo | null>(null);
 
@@ -88,16 +97,21 @@ export function App() {
 
   useEffect(() => {
     void (async () => {
+      // Coming back from installing the App. Nothing to exchange — the fact
+      // that we are here is the signal, and the install check will confirm it.
+      const setup = takeInstallCallback();
+      if (setup) say(setup.action === "install" ? "App installed. Enrol a repository." : "App permissions updated.");
+
       // Both OAuth flows land here as ?code=…; each claims only the callback
       // whose state it stashed, so this cannot swallow Fountain's.
       if (isGithubCallback()) {
         try {
           const gh = await completeGithubLoginIfCallback();
           if (gh) {
-            const auth: GhAuth = { token: gh.token, login: gh.login, via: "app" };
+            const auth: GhAuth = { token: gh.token, login: gh.login };
             saveGhAuth(auth);
             setGhAuth(auth);
-            say(`Signed in to GitHub as ${gh.login}. Enrol a repository and it will use the App.`);
+            say(`Signed in to GitHub as ${gh.login}.`);
           }
         } catch (err) {
           say(err instanceof Error ? err.message : String(err));
@@ -150,19 +164,13 @@ export function App() {
     if (phase === "app") void refresh();
   }, [phase, refresh]);
 
-  // The toolkit environment, and whether it can actually push.
+  // The toolkit environment. It holds no credentials any more — only chant and
+  // its lexicons — so there is nothing here to check beyond whether it exists.
   const checkEnvironment = useCallback(async () => {
     if (!client) return;
     try {
       const env = (await client.listEnvironments()).find((e) => e.name === ENVIRONMENT_NAME);
-      if (!env) {
-        setEnvId(null);
-        setTokenPresent(null);
-        return;
-      }
-      setEnvId(env.id);
-      const keys = await client.listSecretKeys(env.id).catch(() => []);
-      setTokenPresent(keys.some((k) => k.key === TOKEN_KEY));
+      setEnvId(env?.id ?? null);
     } catch {
       // Not fatal — enrolling will create what is missing.
     }
@@ -171,6 +179,33 @@ export function App() {
   useEffect(() => {
     if (phase === "app") void checkEnvironment();
   }, [phase, checkEnvironment]);
+
+  /**
+   * Whether the App is installed. Asked once on sign-in and again whenever the
+   * person comes back from GitHub, because installing it happens over there
+   * and the only way to know it worked is to look.
+   */
+  const checkInstall = useCallback(async () => {
+    if (!ghAuth) {
+      setInstalled(null);
+      return;
+    }
+    setCheckingInstall(true);
+    try {
+      setInstalled((await fetchInstallations(ghAuth.token)).installed);
+    } catch (err) {
+      // A rejected token means the sign-in has expired; say so rather than
+      // reporting the App as missing, which would send them to the wrong fix.
+      say(err instanceof Error ? err.message : String(err));
+      setInstalled(null);
+    } finally {
+      setCheckingInstall(false);
+    }
+  }, [ghAuth, say]);
+
+  useEffect(() => {
+    void checkInstall();
+  }, [checkInstall]);
 
   const enrolled: Enrolled[] = useMemo(() => {
     const byAgent = new Map(schedules.map((s) => [s.agent_id, s]));
@@ -310,37 +345,25 @@ export function App() {
     }
   }, [client, envId, say]);
 
-  const saveToken = useCallback(
-    async (token: string) => {
-      if (!client) return;
-      setSavingToken(true);
-      try {
-        const id = await ensureEnvironment();
-        if (!id) return;
-        await client.putSecret(id, TOKEN_KEY, token);
-        setTokenPresent(true);
-        say("Token saved to the toolkit environment. Rounds can open pull requests from the next run.");
-      } catch (err) {
-        say(describeError(err));
-      } finally {
-        setSavingToken(false);
-      }
-    },
-    [client, ensureEnvironment, say],
-  );
-
-  /** A repository's own vault — a token scoped to it, overriding any shared one. */
+  /**
+   * A repository's own vault, holding its grant and nothing else.
+   *
+   * A vault binds to one conversation, so this repo's grant is reachable by
+   * this repo's agent alone. It used to be able to hold a pasted token under a
+   * different key too, which meant a repo could end up carrying both — the
+   * grant in use and a stale token nobody cleaned up.
+   */
   const ensureVault = useCallback(
-    async (ref: RepoRef, secret: string, key: string = TOKEN_KEY): Promise<string | undefined> => {
+    async (ref: RepoRef, grant: string): Promise<string | undefined> => {
       if (!client) return undefined;
       try {
         const name = vaultName(ref);
         const existing = (await client.listVaults()).find((v) => v.name === name);
         const vault = existing ?? (await client.createVault({ name, description: vaultDescription(ref) }));
-        await client.putVaultSecret(vault.id, key, secret);
+        await client.putVaultSecret(vault.id, GRANT_KEY, grant);
         return vault.id;
       } catch (err) {
-        say(`Could not store the credential: ${describeError(err)}`);
+        say(`Could not store the grant: ${describeError(err)}`);
         return undefined;
       }
     },
@@ -348,8 +371,12 @@ export function App() {
   );
 
   const enroll = useCallback(
-    async (input: string, cron: string, policy: RoundsPolicy, token?: string) => {
+    async (input: string, cron: string, policy: RoundsPolicy) => {
       if (!client) return;
+      if (!ghAuth) {
+        say("Sign in with GitHub first — a repository is enrolled with a grant from the App.");
+        return;
+      }
       const ref = parseRepoInput(input);
       if (!ref) {
         say("That doesn't look like a repo — use owner/name, or a URL on github.com, gitlab.com or codeberg.org.");
@@ -367,22 +394,20 @@ export function App() {
       setAdding(key);
       try {
         const environmentId = await ensureEnvironment();
-        // A grant is preferred over a token: it is not a GitHub credential on
-        // its own, and it is what lets the agent edit .github/workflows.
+        // The grant is the whole credential story. It proves a person who can
+        // push here authorised the work; it is not a GitHub token, and the
+        // server checks both facts before issuing it.
         let vaultId: string | undefined;
-        if (ghAuth) {
-          try {
-            const { grant } = await client.requestGrant(ghAuth.token, `${ref.owner}/${ref.name}`);
-            vaultId = await ensureVault(ref, grant, GRANT_KEY);
-          } catch (err) {
-            say(err instanceof Error ? err.message : String(err));
-            return;
-          }
-        } else if (token) {
-          vaultId = await ensureVault(ref, token);
+        try {
+          const { grant } = await client.requestGrant(ghAuth.token, `${ref.owner}/${ref.name}`);
+          vaultId = await ensureVault(ref, grant);
+        } catch (err) {
+          say(err instanceof Error ? err.message : String(err));
+          return;
         }
+        if (!vaultId) return; // storing it failed, and it was said out loud
         const name = agentName(ref);
-        const want = systemPrompt(ref, policy, `${window.location.origin}/gh/token`);
+        const want = systemPrompt(ref, policy, window.location.origin);
         let agent = (await client.listAgents(name)).find((a) => a.name === name);
         if (agent) {
           if (agent.system !== want) agent = await client.updateAgent(agent.id, { system: want, description: agentDescription(ref) });
@@ -569,8 +594,8 @@ export function App() {
                 <span className="fineprint">no schedule — this repo will not run on its own</span>
               )}
               {current.teammate.conversation.vault_id && (
-                <span className="private" title={`Cloning and pushing with the token in ${vaultName(current.ref)}`}>
-                  private · own token
+                <span className="private" title={`Its grant lives in ${vaultName(current.ref)} — read-only, this repository only`}>
+                  own grant · read-only
                 </span>
               )}
               <div className="head-actions">
@@ -589,12 +614,14 @@ export function App() {
             </header>
 
             <div className="scroll">
-              <GithubRow appInfo={appInfo} auth={ghAuth} onSignOut={githubSignOut} />
-              <TokenGate
-                present={tokenPresent}
-                saving={savingToken}
-                overridden={current.teammate.conversation.vault_id !== null}
-                onSave={(t) => void saveToken(t)}
+              <InstallGate
+                appInfo={appInfo}
+                auth={ghAuth}
+                installed={installed}
+                checking={checkingInstall}
+                onSignIn={() => beginGithubLogin(appInfo!.clientId!)}
+                onSignOut={githubSignOut}
+                onRecheck={() => void checkInstall()}
               />
               {current.schedule?.last_error && (
                 <div className="status-card failed">
@@ -615,15 +642,23 @@ export function App() {
               </h1>
               <p>
                 <a href="https://intentius.io/chant/cli/audit/">chant</a> audits the repositories you enrol — CI
-                workflows, Kubernetes manifests, Dockerfiles, Helm charts, cloud templates — and an agent opens a pull
-                request for what it can fix and verify. One PR per file, never a second for something you already have
+                workflows, Kubernetes manifests, Dockerfiles, Helm charts, cloud templates — and a pull request goes up
+                for what an agent can fix and verify. One PR per file, never a second for something you already have
                 open, and never again for one you closed.
               </p>
               <p className="fineprint">
                 It runs whether or not this page is open. You meet the work on GitHub.
               </p>
-              <GithubRow appInfo={appInfo} auth={ghAuth} onSignOut={githubSignOut} />
-              <EnrollForm big disabled={adding !== null} onEnroll={(v, c, p, t) => void enroll(v, c, p, t)} />
+              <InstallGate
+                appInfo={appInfo}
+                auth={ghAuth}
+                installed={installed}
+                checking={checkingInstall}
+                onSignIn={() => beginGithubLogin(appInfo!.clientId!)}
+                onSignOut={githubSignOut}
+                onRecheck={() => void checkInstall()}
+              />
+              <EnrollForm big disabled={adding !== null} ready={installed === true} onEnroll={(v, c, p) => void enroll(v, c, p)} />
               {pending && (
                 <p className="fineprint">
                   Enrolling <code>{pending}</code>…
@@ -632,65 +667,30 @@ export function App() {
             </div>
           </div>
         )}
-        {current && <EnrollForm disabled={adding !== null} onEnroll={(v, c, p, t) => void enroll(v, c, p, t)} />}
+        {current && <EnrollForm disabled={adding !== null} ready={installed === true} onEnroll={(v, c, p) => void enroll(v, c, p)} />}
       </main>
     </div>
   );
 }
 
 
-/** Who the App will act as, and the offer to sign in when nobody has. */
-function GithubRow(props: { appInfo: AppInfo | null; auth: GhAuth | null; onSignOut: () => void }) {
-  if (!props.appInfo?.configured || !props.appInfo.clientId) return null;
-  if (props.auth) {
-    return (
-      <div className="tokenrow ok">
-        <span className="dot on" />
-        <span className="fineprint">
-          Signed in to GitHub as <b>{props.auth.login}</b>. Repositories you enrol get a grant instead of a stored
-          token, and the App may edit <code>.github/workflows</code>.
-        </span>
-        <button className="linkish" onClick={props.onSignOut}>
-          sign out
-        </button>
-      </div>
-    );
-  }
-  return (
-    <div className="tokenrow warn">
-      <span className="dot warnDot" />
-      <span className="fineprint">
-        Sign in with GitHub and enrolled repositories carry a short-lived grant rather than a standing token — and the{" "}
-        <a href={props.appInfo.installUrl ?? "#"} target="_blank" rel="noreferrer">
-          {props.appInfo.slug}
-        </a>{" "}
-        App can fix <code>.github/workflows</code>, where most findings are.
-      </span>
-      <button className="primary" onClick={() => beginGithubLogin(props.appInfo!.clientId!)}>
-        Sign in with GitHub
-      </button>
-    </div>
-  );
-}
-
 function EnrollForm(props: {
-  onEnroll: (repo: string, cron: string, policy: RoundsPolicy, token?: string) => void;
+  onEnroll: (repo: string, cron: string, policy: RoundsPolicy) => void;
   disabled: boolean;
+  /** Signed in, App installed. Without it there is nothing to enrol with. */
+  ready: boolean;
   big?: boolean;
 }) {
   const [value, setValue] = useState("");
   const [cron, setCron] = useState(DEFAULT_CRON);
   const [judgement, setJudgement] = useState(false);
-  const [token, setToken] = useState("");
-  const [showToken, setShowToken] = useState(false);
   const submit = (e: FormEvent) => {
     e.preventDefault();
     if (!value.trim()) return;
-    props.onEnroll(value.trim(), cron, { ...DEFAULT_POLICY, includeNeedsReview: judgement }, token.trim() || undefined);
+    props.onEnroll(value.trim(), cron, { ...DEFAULT_POLICY, includeNeedsReview: judgement });
     setValue("");
-    setToken("");
-    setShowToken(false);
   };
+  const blocked = props.disabled || !props.ready;
   return (
     <form className={props.big ? "enroll big" : "enroll"} onSubmit={submit}>
       <div className="enroll-row">
@@ -698,48 +698,31 @@ function EnrollForm(props: {
           value={value}
           onChange={(e) => setValue(e.target.value)}
           placeholder="owner/name — a GitHub repo you can push to"
-          disabled={props.disabled}
+          disabled={blocked}
           aria-label="repository"
         />
-        <select value={cron} onChange={(e) => setCron(e.target.value)} aria-label="cadence" disabled={props.disabled}>
+        <select value={cron} onChange={(e) => setCron(e.target.value)} aria-label="cadence" disabled={blocked}>
           {CRON_PRESETS.map((p) => (
             <option key={p.cron} value={p.cron}>
               {p.label}
             </option>
           ))}
         </select>
-        <button type="submit" className="primary" disabled={props.disabled || !value.trim()}>
+        <button type="submit" className="primary" disabled={blocked || !value.trim()}>
           {props.disabled ? "…" : "Enrol"}
         </button>
       </div>
       <label className="judgement">
-        <input type="checkbox" checked={judgement} onChange={(e) => setJudgement(e.target.checked)} />
+        <input type="checkbox" checked={judgement} onChange={(e) => setJudgement(e.target.checked)} disabled={blocked} />
         <span>
           Also propose the judgement calls — chant's guidance findings, fixed by the agent rather than only the
           mechanical ones. More value, more to review.
         </span>
       </label>
-      {showToken ? (
-        <div className="tokenfield">
-          <input
-            type="password"
-            value={token}
-            onChange={(e) => setToken(e.target.value)}
-            placeholder="token for this repository"
-            disabled={props.disabled}
-            aria-label="repository token"
-          />
-          <p className="fineprint">
-            Kept in a vault of its own and bound to this repository's agent — it overrides the shared token for this
-            repo alone. Needed for a private repository, and the better shape for any of them: scope it to{" "}
-            <b>this repository only</b>, since the agent reads untrusted repository content while holding it.
-          </p>
-        </div>
-      ) : (
-        <button type="button" className="linkish" onClick={() => setShowToken(true)} disabled={props.disabled}>
-          private repository, or want a token scoped to just this one?
-        </button>
-      )}
+      <p className="fineprint">
+        The repository has to be one the App is installed on, and one you can push to — the server checks both before it
+        will enrol it.
+      </p>
     </form>
   );
 }

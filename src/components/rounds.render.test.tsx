@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { renderToString } from "react-dom/server";
 import { foldRounds } from "../lib/protocol";
 import { RoundView } from "./RoundView";
-import { TokenGate } from "./TokenGate";
+import { InstallGate } from "./InstallGate";
 
 const REPO = { host: "github.com", owner: "o", name: "r" } as const;
 
@@ -51,7 +51,7 @@ describe("RoundView", () => {
 
   test("a failed cluster explains itself rather than being silent", () => {
     expect(html).toContain("helm template failed after the edit");
-    expect(html).toContain("it could not verify or push the fix, so it opened nothing");
+    expect(html).toContain("it could not verify the fix, or the server refused it");
   });
 
   test("pull requests link out, rules link to their reference", () => {
@@ -80,20 +80,45 @@ describe("RoundView", () => {
   });
 });
 
-describe("TokenGate", () => {
-  test("confirms when the environment can push", () => {
-    const html = renderToString(<TokenGate present saving={false} onSave={() => {}} />);
-    expect(html).toContain("GITHUB_TOKEN");
-    expect(html).toContain("can push and open pull requests");
+describe("InstallGate", () => {
+  const APP = { configured: true, slug: "rounds-bot", clientId: "Iv1.abc", installUrl: "https://github.com/apps/rounds-bot/installations/new" };
+  const AUTH = { token: "gho_x", login: "octocat" };
+  const render = (over: Record<string, unknown> = {}) =>
+    renderToString(
+      <InstallGate
+        appInfo={APP}
+        auth={null}
+        installed={null}
+        checking={false}
+        onSignIn={() => {}}
+        onSignOut={() => {}}
+        onRecheck={() => {}}
+        {...over}
+      />,
+    );
+
+  test("nobody signed in: offers the sign-in, and never a token to paste", () => {
+    const html = render();
+    expect(html).toContain("Sign in with GitHub");
+    expect(html).not.toContain("github_pat");
   });
 
-  test("warns when it cannot, and says what still works", () => {
-    const html = renderToString(<TokenGate present={false} saving={false} onSave={() => {}} />);
-    expect(html).toContain("still audit and report");
-    expect(html).toContain("set it");
+  test("signed in but the App is nowhere: sends them to install it", () => {
+    const html = render({ auth: AUTH, installed: false });
+    expect(html).toContain("is not installed anywhere yet");
+    expect(html).toContain("https://github.com/apps/rounds-bot/installations/new");
+    expect(html).toContain("I&#x27;ve installed it");
   });
 
-  test("says nothing while the answer is unknown", () => {
-    expect(renderToString(<TokenGate present={null} saving={false} onSave={() => {}} />)).toBe("");
+  test("ready: says what the agent can and cannot do", () => {
+    const html = render({ auth: AUTH, installed: true });
+    expect(html).toContain("octocat");
+    expect(html).toContain("cannot write anywhere");
+  });
+
+  test("no App on this deployment: says so, because there is no fallback left", () => {
+    const html = render({ appInfo: { configured: false, slug: null, clientId: null, installUrl: null } });
+    expect(html).toContain("no GitHub App configured");
+    expect(html).toContain("GRANT_SECRET");
   });
 });

@@ -138,7 +138,9 @@ const schedule = {
 
 const environment = { id: "env-toolkit", name: "Rounds toolkit", networking_type: "unrestricted", agent_count: 1 };
 // Flip this to [] to develop against the "no token yet" gate.
-const secrets = [{ key: "GITHUB_TOKEN", inserted_at: now, updated_at: now }];
+// The toolkit environment holds no credentials any more — each repo's agent
+// carries its own grant in its own vault.
+const secrets: Array<{ key: string; inserted_at: string; updated_at: string }> = [];
 
 const json = (data: unknown) => Response.json({ data });
 

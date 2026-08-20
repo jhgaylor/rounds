@@ -1,9 +1,10 @@
 /**
  * What the process needs to act as the GitHub App — and nothing else.
  *
- * All of it is optional: with none of it set the app still works exactly as it
- * did before, with pasted tokens. That keeps the deployment honest, because a
- * missing secret degrades to the old path instead of a blank page.
+ * It is optional only in the sense that the process still starts and serves
+ * the page without it. It is not optional to the product: the App is the only
+ * way a round reaches a repository now, so a deployment missing these can sign
+ * people in and show them nothing they can do.
  */
 import { normalizeKey, type AppConfig } from "./github";
 

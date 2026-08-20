@@ -41,6 +41,29 @@ export function beginGithubLogin(clientId: string): void {
   window.location.href = `https://github.com/login/oauth/authorize?${q}`;
 }
 
+/**
+ * True when GitHub has just bounced back from installing the App.
+ *
+ * This used to be dropped on the floor: `clearParams` stripped
+ * `installation_id` and `setup_action` and nothing ever looked at them, so the
+ * step between signing in and enrolling had no completion at all — you found
+ * out whether the App was installed when a grant request 404'd halfway through
+ * an enrolment.
+ */
+export function isInstallCallback(): boolean {
+  const params = new URLSearchParams(window.location.search);
+  return params.get("setup_action") !== null || params.get("installation_id") !== null;
+}
+
+/** Consume that callback, leaving the URL clean. */
+export function takeInstallCallback(): { installationId: string | null; action: string | null } | null {
+  if (!isInstallCallback()) return null;
+  const params = new URLSearchParams(window.location.search);
+  const out = { installationId: params.get("installation_id"), action: params.get("setup_action") };
+  clearParams(["installation_id", "setup_action"]);
+  return out;
+}
+
 /** True when the URL carries a callback this flow started — and not Fountain's. */
 export function isGithubCallback(): boolean {
   const params = new URLSearchParams(window.location.search);
@@ -64,7 +87,7 @@ export async function completeGithubLoginIfCallback(): Promise<GhLogin | null> {
   const params = new URLSearchParams(window.location.search);
   const stashed = sessionStorage.getItem(STASH);
   sessionStorage.removeItem(STASH);
-  clearParams();
+  clearParams(["code", "state", "error", "error_description"]);
 
   const error = params.get("error");
   if (error) {
@@ -82,12 +105,16 @@ export async function completeGithubLoginIfCallback(): Promise<GhLogin | null> {
   return { token: body.token, login: body.login, expiresIn: body.expiresIn ?? null };
 }
 
-/** Strip the OAuth parameters without reloading. */
-function clearParams(): void {
+/**
+ * Strip the named parameters without reloading.
+ *
+ * Each flow clears only its own. GitHub can land a sign-in and an install on
+ * the same URL — `?code=…&installation_id=…` — and a clear that took both
+ * would delete whichever half had not run yet.
+ */
+function clearParams(keys: string[]): void {
   const url = new URL(window.location.href);
-  for (const k of ["code", "state", "error", "error_description", "installation_id", "setup_action"]) {
-    url.searchParams.delete(k);
-  }
+  for (const k of keys) url.searchParams.delete(k);
   window.history.replaceState({}, "", url.pathname + url.search + url.hash);
 }
 
@@ -96,6 +123,23 @@ export interface AppInfo {
   slug: string | null;
   clientId: string | null;
   installUrl: string | null;
+}
+
+export interface Installations {
+  installed: boolean;
+  installations: Array<{ id: number; account: string; repositorySelection: string }>;
+}
+
+/** Where this person has the App installed. The gate between signing in and enrolling. */
+export async function fetchInstallations(token: string): Promise<Installations> {
+  const res = await fetch("/gh/installations", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ token }),
+  });
+  const body = (await res.json().catch(() => ({}))) as Partial<Installations> & { error?: string };
+  if (!res.ok) throw new Error(body.error ?? "Could not ask GitHub where the App is installed.");
+  return { installed: body.installed === true, installations: body.installations ?? [] };
 }
 
 /** What this deployment's GitHub App is, or a not-configured answer. */

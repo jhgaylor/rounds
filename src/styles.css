@@ -264,15 +264,16 @@ a code { color: inherit; }
 .historylist .what { color: var(--text-2); }
 .disclosure { background: none; border: none; padding: 0; color: var(--text-2); font-size: 13px; text-align: left; }
 
-/* ── the token, and the cadence ──────────────────────────────────────────── */
-.tokengate { display: flex; flex-direction: column; gap: 8px; }
+/* ── the install gate, and the cadence ───────────────────────────────────── */
 .tokenrow { display: flex; align-items: center; gap: 8px; border: 1px solid var(--border); border-radius: 9px; padding: 8px 12px; background: var(--bg-1); }
 .tokenrow.warn { border-color: var(--warn); background: var(--warn-soft); }
 .tokenrow .linkish { margin-left: auto; font-size: 12px; flex-shrink: 0; }
 .warnDot { background: var(--warn); }
-.tokenform { display: flex; flex-direction: column; gap: 8px; border: 1px dashed var(--border); border-radius: 9px; padding: 10px 12px; }
-.tokenform-row { display: flex; gap: 8px; }
-.tokenform-row input { flex: 1; min-width: 0; font-family: var(--mono); font-size: 12.5px; }
+/* An anchor that is the primary action — same shape as button.primary. */
+a.buttonish { font: inherit; border-radius: 7px; padding: 6px 12px; text-decoration: none; flex-shrink: 0;
+  background: var(--brand); border: 1px solid var(--brand); color: #fff; }
+a.buttonish:hover { background: var(--brand-hover); }
+@media (prefers-color-scheme: dark) { a.buttonish { color: #1a1512; } }
 .cadence { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; }
 .cadence .cronin { font-family: var(--mono); font-size: 12.5px; width: 140px; }
 select { font: inherit; font-size: 13px; color: var(--text); background: var(--bg-1); border: 1px solid var(--border); border-radius: 7px; padding: 6px 8px; }
@@ -290,6 +291,4 @@ select { font: inherit; font-size: 13px; color: var(--text); background: var(--b
 .hero-card h1 b { color: var(--brand); font-weight: 700; }
 
 /* ── per-repo credentials ────────────────────────────────────────────────── */
-.tokenfield { display: flex; flex-direction: column; gap: 6px; }
-.tokenfield input { font-family: var(--mono); font-size: 12.5px; }
 .private { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--brand); border: 1px solid var(--brand); border-radius: 999px; padding: 1px 8px; cursor: help; }

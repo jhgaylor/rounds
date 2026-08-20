@@ -14,41 +14,125 @@ const { publicKey, privateKey } = crypto.generateKeyPairSync("rsa", {
 const SECRET = "grant-signing-secret";
 
 // ── a fake GitHub, so the whole flow is exercised without the network ───────
+interface FakePull {
+  number: number;
+  state: string;
+  merged_at: string | null;
+  head: string;
+  title?: string;
+}
 interface FakeOpts {
   pushable?: string[];
   installedOn?: string[];
+  /** Pull requests already on the repo, rounds-branched or not. */
+  pulls?: FakePull[];
+  /** The repo's own `.rounds.yml`, or null when it has none. */
+  policyFile?: string | null;
+  defaultBranch?: string;
 }
 function fakeGitHub(opts: FakeOpts = {}) {
   const pushable = new Set(opts.pushable ?? ["o/r"]);
   const installed = new Set(opts.installedOn ?? ["o/r"]);
+  const defaultBranch = opts.defaultBranch ?? "main";
   const calls: string[] = [];
+  /** Every set of permissions a token was minted with, in order. */
+  const minted: Array<Record<string, string> | undefined> = [];
+  /** What actually got written, so a test can assert on the commit and the PR. */
+  const written = {
+    blobs: [] as string[],
+    tree: null as unknown,
+    commitMessage: null as string | null,
+    commitParents: [] as string[],
+    refs: [] as Array<{ ref: string; sha: string; forced: boolean }>,
+    pull: null as { title: string; body: string; head: string; base: string } | null,
+  };
+
   const impl = (async (input: string | URL | Request, init?: RequestInit) => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
     const method = init?.method ?? "GET";
     const path = new URL(url).pathname;
+    const body = () => JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
     calls.push(`${method} ${path}`);
 
     if (path === "/login/oauth/access_token") {
-      const body = JSON.parse(String(init?.body ?? "{}")) as { code?: string };
-      if (body.code !== "good-code") return Response.json({ error: "bad_verification_code", error_description: "The code is incorrect." }, { status: 200 });
+      const b = body() as { code?: string };
+      if (b.code !== "good-code") return Response.json({ error: "bad_verification_code", error_description: "The code is incorrect." }, { status: 200 });
       return Response.json({ access_token: "gho_usertoken", expires_in: 28800 });
     }
     if (path === "/user") return Response.json({ login: "octocat" });
-    if (path.startsWith("/repos/") && path.endsWith("/installation")) {
-      const slug = path.slice("/repos/".length, -"/installation".length);
-      return installed.has(slug) ? Response.json({ id: 99 }) : Response.json({ message: "Not Found" }, { status: 404 });
-    }
-    if (path.startsWith("/repos/")) {
-      const slug = path.slice("/repos/".length);
-      return Response.json({ permissions: { push: pushable.has(slug) } });
+    if (path === "/user/installations") {
+      return Response.json({ installations: [...installed].map((slug, i) => ({ id: 99 + i, account: { login: slug.split("/")[0] }, repository_selection: "selected" })) });
     }
     if (path === "/app/installations/99/access_tokens") {
-      const body = JSON.parse(String(init?.body ?? "{}")) as { repositories?: string[] };
-      return Response.json({ token: `ghs_for_${body.repositories?.[0]}`, expires_at: "2026-08-20T10:00:00Z" }, { status: 201 });
+      const b = body() as { repositories?: string[]; permissions?: Record<string, string> };
+      minted.push(b.permissions);
+      return Response.json({ token: `ghs_for_${b.repositories?.[0]}`, expires_at: "2026-08-20T10:00:00Z" }, { status: 201 });
+    }
+
+    // ── everything under /repos/{owner}/{name}/… ────────────────────────────
+    const repo = /^\/repos\/([^/]+\/[^/]+)(\/.*)?$/.exec(path);
+    if (repo) {
+      const slug = repo[1]!;
+      const rest = repo[2] ?? "";
+
+      if (rest === "/installation") {
+        return installed.has(slug) ? Response.json({ id: 99 }) : Response.json({ message: "Not Found" }, { status: 404 });
+      }
+      if (rest === "/pulls" && method === "GET") {
+        return Response.json(
+          (opts.pulls ?? []).map((p) => ({
+            number: p.number,
+            state: p.state,
+            merged_at: p.merged_at,
+            html_url: `https://github.com/${slug}/pull/${p.number}`,
+            title: p.title ?? "a pull request",
+            head: { ref: p.head },
+          })),
+        );
+      }
+      if (rest === "/pulls" && method === "POST") {
+        written.pull = body() as unknown as { title: string; body: string; head: string; base: string };
+        return Response.json({ number: 77, html_url: `https://github.com/${slug}/pull/77` }, { status: 201 });
+      }
+      if (rest.startsWith("/contents/")) {
+        const wanted = decodeURIComponent(rest.slice("/contents/".length).split("?")[0]!);
+        if (wanted === ".rounds.yml" && opts.policyFile != null) {
+          return Response.json({ content: Buffer.from(opts.policyFile, "utf8").toString("base64"), encoding: "base64" });
+        }
+        return Response.json({ message: "Not Found" }, { status: 404 });
+      }
+      if (rest.startsWith("/git/ref/heads/")) return Response.json({ object: { sha: "basesha0" } });
+      if (rest.startsWith("/git/commits/") && method === "GET") return Response.json({ tree: { sha: "basetree" } });
+      if (rest === "/git/blobs" && method === "POST") {
+        written.blobs.push(Buffer.from(String(body().content), "base64").toString("utf8"));
+        return Response.json({ sha: `blob${written.blobs.length}` }, { status: 201 });
+      }
+      if (rest === "/git/trees" && method === "POST") {
+        written.tree = body().tree;
+        return Response.json({ sha: "newtree" }, { status: 201 });
+      }
+      if (rest === "/git/commits" && method === "POST") {
+        const b = body() as { message?: string; parents?: string[] };
+        written.commitMessage = b.message ?? null;
+        written.commitParents = b.parents ?? [];
+        return Response.json({ sha: "newcommit" }, { status: 201 });
+      }
+      if (rest === "/git/refs" && method === "POST") {
+        const b = body() as { ref?: string; sha?: string };
+        if (written.refs.some((r) => r.ref === b.ref)) return Response.json({ message: "Reference already exists" }, { status: 422 });
+        written.refs.push({ ref: b.ref!, sha: b.sha!, forced: false });
+        return Response.json({ ref: b.ref }, { status: 201 });
+      }
+      if (rest.startsWith("/git/refs/heads/") && method === "PATCH") {
+        const b = body() as { sha?: string; force?: boolean };
+        written.refs.push({ ref: `refs${rest.slice("/git/refs".length)}`, sha: b.sha!, forced: b.force === true });
+        return Response.json({});
+      }
+      if (rest === "") return Response.json({ permissions: { push: pushable.has(slug) }, default_branch: defaultBranch });
     }
     return Response.json({ message: "Not Found" }, { status: 404 });
   }) as unknown as typeof fetch;
-  return { impl, calls };
+  return { impl, calls, minted, written };
 }
 
 const ENV = {
@@ -218,7 +302,7 @@ describe("POST /gh/token", () => {
     const res = await post(routesWith(fakeGitHub()), { grant });
     expect(res.status).toBe(200);
     // the fake echoes the repositories it was asked to scope to
-    expect(await res.json()).toEqual({ token: "ghs_for_r", expiresAt: "2026-08-20T10:00:00Z", repo: "o/r" });
+    expect(await res.json()).toEqual({ token: "ghs_for_r", expiresAt: "2026-08-20T10:00:00Z", repo: "o/r", permissions: "contents:read" });
   });
 
   test("an invalid or forged grant gets nothing", async () => {
@@ -249,5 +333,218 @@ describe("CORS", () => {
     expect(ok.headers.get("access-control-allow-origin")).toBe("https://rounds.inevitable.fyi");
     const no = await routes(new Request(url, { headers: { origin: "https://evil.test" } }), url);
     expect(no.headers.get("access-control-allow-origin")).toBeNull();
+  });
+});
+
+// ── the round-facing half: read-only tokens, and a server that does the writing ──
+
+const grantFor = (repo = "o/r") => issueGrant({ login: "octocat", repo, issuedAt: Math.floor(Date.now() / 1000) }, SECRET);
+
+const postJson = (routes: ReturnType<typeof buildRoutes>, path: string, body: unknown) =>
+  call(routes, path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+
+/** A complete, valid proposal — tests vary one field at a time from here. */
+const proposal = (over: Record<string, unknown> = {}) => ({
+  grant: grantFor(),
+  cluster: "github-workflows-ci-yml",
+  base: "abc1234",
+  title: "ci: harden workflow permissions",
+  body: "chant flagged GHA033.",
+  files: [{ path: ".github/workflows/ci.yml", content: "on: push\n" }],
+  ...over,
+});
+
+describe("the agent's token", () => {
+  test("is read-only — the one property the whole design rests on", async () => {
+    const fake = fakeGitHub();
+    await postJson(routesWith(fake), "/gh/token", { grant: grantFor() });
+    expect(fake.minted).toEqual([{ contents: "read", metadata: "read" }]);
+  });
+
+  test("is scoped to the repo in the signature, never one the caller names", async () => {
+    const fake = fakeGitHub({ installedOn: ["o/r", "o/other"] });
+    const res = await postJson(routesWith(fake), "/gh/token", { grant: grantFor("o/r"), repo: "o/other" });
+    expect((await res.json()).repo).toBe("o/r");
+  });
+});
+
+describe("POST /gh/state", () => {
+  test("tells a round where HEAD is, what the policy says, and what it already proposed", async () => {
+    const fake = fakeGitHub({
+      pulls: [
+        { number: 41, state: "open", merged_at: null, head: "rounds/dockerfile" },
+        { number: 12, state: "open", merged_at: null, head: "feature/unrelated" },
+      ],
+    });
+    const res = await postJson(routesWith(fake), "/gh/state", { grant: grantFor() });
+    const state = await res.json();
+    expect(state.defaultBranch).toBe("main");
+    expect(state.head).toBe("basesha0");
+    expect(state.openPrs).toBe(1); // the feature branch is not ours and does not count
+    expect(state.pulls).toEqual([{ number: 41, state: "open", merged: false, head: "rounds/dockerfile", url: "https://github.com/o/r/pull/41", title: "a pull request", cluster: "dockerfile" }]);
+    expect(state.capacity).toBe(2);
+  });
+
+  test("reads the repository's own .rounds.yml, so one parser decides the policy", async () => {
+    const fake = fakeGitHub({ policyFile: "max_open_prs: 5\ntiers: [quick-win, needs-review]\nignore:\n  - GHA021\n" });
+    const state = await (await postJson(routesWith(fake), "/gh/state", { grant: grantFor() })).json();
+    expect(state.policy).toEqual({ enabled: true, tiers: ["quick-win", "needs-review"], ignore: ["GHA021"], pathsIgnore: [], maxOpenPrs: 5 });
+    expect(state.capacity).toBe(5);
+  });
+
+  test("reads it with a read-only token", async () => {
+    const fake = fakeGitHub();
+    await postJson(routesWith(fake), "/gh/state", { grant: grantFor() });
+    expect(fake.minted).toEqual([{ contents: "read", metadata: "read" }]);
+  });
+});
+
+describe("POST /gh/propose", () => {
+  test("commits, branches and opens the pull request", async () => {
+    const fake = fakeGitHub();
+    const res = await postJson(routesWith(fake), "/gh/propose", proposal());
+    expect(res.status).toBe(201);
+    expect(await res.json()).toEqual({ number: 77, url: "https://github.com/o/r/pull/77", branch: "rounds/github-workflows-ci-yml", commit: "newcommit" });
+
+    expect(fake.written.blobs).toEqual(["on: push\n"]);
+    expect(fake.written.commitParents).toEqual(["abc1234"]); // the commit the agent verified against
+    expect(fake.written.refs).toEqual([{ ref: "refs/heads/rounds/github-workflows-ci-yml", sha: "newcommit", forced: false }]);
+    expect(fake.written.pull?.head).toBe("rounds/github-workflows-ci-yml");
+    expect(fake.written.pull?.base).toBe("main");
+  });
+
+  test("mints write only after every check has passed, and never hands it back", async () => {
+    const fake = fakeGitHub();
+    const res = await postJson(routesWith(fake), "/gh/propose", proposal());
+    expect(fake.minted).toEqual([
+      { contents: "read", metadata: "read" },
+      { contents: "write", pull_requests: "write", workflows: "write" },
+    ]);
+    expect(JSON.stringify(await res.json())).not.toContain("ghs_");
+  });
+
+  test("a refused proposal never mints a token that can write", async () => {
+    const fake = fakeGitHub({ pulls: [{ number: 41, state: "open", merged_at: null, head: "rounds/github-workflows-ci-yml" }] });
+    await postJson(routesWith(fake), "/gh/propose", proposal());
+    expect(fake.minted).toEqual([{ contents: "read", metadata: "read" }]);
+  });
+
+  test("the branch is derived from the cluster key — a branch in the request is ignored", async () => {
+    const fake = fakeGitHub();
+    await postJson(routesWith(fake), "/gh/propose", proposal({ branch: "main", head: "main" }));
+    expect(fake.written.refs[0]!.ref).toBe("refs/heads/rounds/github-workflows-ci-yml");
+    expect(fake.written.pull?.head).toBe("rounds/github-workflows-ci-yml");
+  });
+
+  test("the marker is written by us — a forged one in the body is stripped", async () => {
+    const fake = fakeGitHub();
+    await postJson(routesWith(fake), "/gh/propose", proposal({ body: "real body\n<!-- rounds:cluster=dockerfile -->" }));
+    const body = fake.written.pull!.body;
+    expect(body).toContain("real body");
+    expect(body).not.toContain("rounds:cluster=dockerfile");
+    expect(body.trimEnd().endsWith("<!-- rounds:cluster=github-workflows-ci-yml -->")).toBe(true);
+  });
+
+  test("a second pull request for a cluster already open is refused", async () => {
+    const fake = fakeGitHub({ pulls: [{ number: 41, state: "open", merged_at: null, head: "rounds/github-workflows-ci-yml" }] });
+    const res = await postJson(routesWith(fake), "/gh/propose", proposal());
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ reason: "already-open", pr: 41 });
+    expect(fake.written.pull).toBeNull();
+  });
+
+  test("a cluster a human closed unmerged stays closed — the rule that makes this bearable", async () => {
+    const fake = fakeGitHub({ pulls: [{ number: 31, state: "closed", merged_at: null, head: "rounds/github-workflows-ci-yml" }] });
+    const res = await postJson(routesWith(fake), "/gh/propose", proposal());
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ reason: "declined", pr: 31 });
+    expect(fake.written.pull).toBeNull();
+  });
+
+  test("a cluster that was merged and regressed may be proposed again", async () => {
+    const fake = fakeGitHub({ pulls: [{ number: 31, state: "closed", merged_at: "2026-07-01T00:00:00Z", head: "rounds/github-workflows-ci-yml" }] });
+    expect((await postJson(routesWith(fake), "/gh/propose", proposal())).status).toBe(201);
+  });
+
+  test("the cap is counted here, not asked for politely", async () => {
+    const fake = fakeGitHub({
+      pulls: [
+        { number: 1, state: "open", merged_at: null, head: "rounds/a" },
+        { number: 2, state: "open", merged_at: null, head: "rounds/b" },
+        { number: 3, state: "open", merged_at: null, head: "rounds/c" },
+      ],
+    });
+    const res = await postJson(routesWith(fake), "/gh/propose", proposal());
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ reason: "at-cap" });
+  });
+
+  test("the repository's own cap wins over ours", async () => {
+    const pulls = [
+      { number: 1, state: "open", merged_at: null, head: "rounds/a" },
+      { number: 2, state: "open", merged_at: null, head: "rounds/b" },
+      { number: 3, state: "open", merged_at: null, head: "rounds/c" },
+    ];
+    expect((await postJson(routesWith(fakeGitHub({ pulls, policyFile: "max_open_prs: 5\n" })), "/gh/propose", proposal())).status).toBe(201);
+    expect((await postJson(routesWith(fakeGitHub({ pulls: [], policyFile: "max_open_prs: 0\n" })), "/gh/propose", proposal())).status).toBe(409);
+  });
+
+  test("enabled: false in .rounds.yml stops everything, and now actually stops it", async () => {
+    const fake = fakeGitHub({ policyFile: "enabled: false\n" });
+    const res = await postJson(routesWith(fake), "/gh/propose", proposal());
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ reason: "disabled" });
+    expect(fake.written.pull).toBeNull();
+  });
+
+  test("an abandoned rounds branch with no pull request is reused rather than wedging the cluster", async () => {
+    const fake = fakeGitHub();
+    const routes = routesWith(fake);
+    await postJson(routes, "/gh/propose", proposal());
+    await postJson(routes, "/gh/propose", proposal());
+    expect(fake.written.refs).toEqual([
+      { ref: "refs/heads/rounds/github-workflows-ci-yml", sha: "newcommit", forced: false },
+      { ref: "refs/heads/rounds/github-workflows-ci-yml", sha: "newcommit", forced: true },
+    ]);
+  });
+
+  test("a forged or missing grant gets nothing, and GitHub is never called", async () => {
+    for (const grant of [undefined, "not-a-grant", issueGrant({ login: "mallory", repo: "o/r", issuedAt: 0 }, "another-secret")]) {
+      const fake = fakeGitHub();
+      const res = await postJson(routesWith(fake), "/gh/propose", proposal({ grant }));
+      expect(res.status).toBe(401);
+      expect(fake.calls).toEqual([]);
+    }
+  });
+});
+
+describe("what a proposal may contain", () => {
+  const rejects = async (over: Record<string, unknown>, fragment: string) => {
+    const fake = fakeGitHub();
+    const res = await postJson(routesWith(fake), "/gh/propose", proposal(over));
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toContain(fragment);
+    expect(fake.written.pull).toBeNull();
+  };
+
+  test("a path that climbs out of the repository is refused", () => rejects({ files: [{ path: "../../etc/passwd", content: "x" }] }, "not normalised"));
+  test("an absolute path is refused", () => rejects({ files: [{ path: "/etc/passwd", content: "x" }] }, "relative to the repository root"));
+  test("writing inside .git is refused", () => rejects({ files: [{ path: ".git/config", content: "x" }] }, "may not write inside .git"));
+  test("a cluster key that is not a cluster key is refused", () => rejects({ cluster: "../main" }, "cluster must be a key"));
+  test("a cluster key cannot smuggle a slash into the branch", () => rejects({ cluster: "a/b" }, "cluster must be a key"));
+  test("no files is refused", () => rejects({ files: [] }, "at least one change"));
+  test("the same path twice is refused", () =>
+    rejects({ files: [{ path: "Dockerfile", content: "a" }, { path: "Dockerfile", content: "b" }] }, "appears twice"));
+  test("a base that is not a sha is refused", () => rejects({ base: "HEAD" }, "commit sha"));
+  test("a multi-line title is refused", () => rejects({ title: "one\ntwo" }, "one line"));
+  test("more files than the limit is refused", () =>
+    rejects({ files: Array.from({ length: 21 }, (_, i) => ({ path: `f${i}.yml`, content: "x" })) }, "at most 20 files"));
+
+  test("a deletion is a legitimate change", async () => {
+    const fake = fakeGitHub();
+    const res = await postJson(routesWith(fake), "/gh/propose", proposal({ files: [{ path: "Dockerfile", deleted: true }] }));
+    expect(res.status).toBe(201);
+    expect(fake.written.blobs).toEqual([]);
+    expect(fake.written.tree).toEqual([{ path: "Dockerfile", mode: "100644", type: "blob", sha: null }]);
   });
 });

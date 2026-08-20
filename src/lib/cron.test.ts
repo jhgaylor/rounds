@@ -77,17 +77,27 @@ describe("relativeTime", () => {
 });
 
 describe("the credential never leaks into the prompt", () => {
-  test("the rendered system prompt names the variable, never a value", async () => {
-    const { systemPrompt, vaultName, TOKEN_KEY } = await import("./spec");
+  test("the rendered system prompt names the variables, never a value", async () => {
+    const { systemPrompt, vaultName, GRANT_KEY } = await import("./spec");
     const p = systemPrompt({ host: "github.com", owner: "o", name: "r" });
     expect(p).toContain("$GITHUB_TOKEN@github.com/o/r.git");
     expect(p).toContain("never print it");
     expect(p).toContain("never echo a command with it expanded");
     // The prompt is generated from a ref alone, so there is nowhere for a real
-    // token to enter it — assert the only occurrences are the shell variable.
-    const occurrences = p.split(TOKEN_KEY).length - 1;
-    expect(occurrences).toBeGreaterThan(0);
+    // credential to enter it — assert the only occurrences are shell variables.
+    expect(p.split(GRANT_KEY).length - 1).toBeGreaterThan(0);
     expect(p).not.toMatch(/gh[ps]_[A-Za-z0-9]{16,}/);
+    expect(p).not.toMatch(/roundsg1\.[A-Za-z0-9_-]+\./);
     expect(vaultName({ host: "github.com", owner: "o", name: "r" })).toBe("Rounds: github.com/o/r");
+  });
+
+  test("the prompt no longer tells the agent to write anywhere", async () => {
+    const { systemPrompt } = await import("./spec");
+    const p = systemPrompt({ host: "github.com", owner: "o", name: "r" });
+    // The whole point of the rework: no push, no pull-request POST to GitHub.
+    expect(p).not.toContain("git push");
+    expect(p).not.toContain("api.github.com/repos/o/r/pulls");
+    expect(p).toContain("/gh/propose");
+    expect(p).toContain("You cannot push.");
   });
 });

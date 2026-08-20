@@ -21,8 +21,9 @@ spec:
           image: ghcr.io/jhgaylor/rounds:sha-f6c05fc406a10919751b2d4e81032afd5ee791be
           ports:
             - containerPort: 8080
-          # The GitHub App. Optional: without it /gh answers 503 and rounds
-          # fall back to a GITHUB_TOKEN on the environment or a repo's vault.
+          # The GitHub App. The only way a round reaches a repository: the
+          # agents hold read-only tokens, and this process is what writes.
+          # Without it /gh answers 503 and nothing can be enrolled.
           envFrom:
             - secretRef:
                 name: rounds-github-app

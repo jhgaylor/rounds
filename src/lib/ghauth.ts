@@ -1,9 +1,10 @@
 /**
- * The viewer's own GitHub credential, kept in this browser only.
+ * The signed-in person's own GitHub token, kept in this browser only.
  *
- * Deliberately not a shared token: Rounds is a public page, so anything the app
- * could read, every visitor could read. The PR is opened as whoever is sitting
- * here, with a token they control and can revoke.
+ * It comes from "Sign in with GitHub" and it never leaves this browser except
+ * to ask our own server for a grant — which it can only get for a repository
+ * the person can already push to. Nothing unattended ever holds it: the agents
+ * carry grants, and grants are not GitHub credentials.
  */
 
 const KEY = "rounds.github";
@@ -12,8 +13,6 @@ export interface GhAuth {
   token: string;
   login: string;
   avatarUrl?: string;
-  /** How it was obtained — an App sign-in can be renewed by signing in again. */
-  via?: "paste" | "app";
 }
 
 export function loadGhAuth(): GhAuth | null {
@@ -24,7 +23,6 @@ export function loadGhAuth(): GhAuth | null {
     if (typeof parsed.token !== "string" || typeof parsed.login !== "string") return null;
     const auth: GhAuth = { token: parsed.token, login: parsed.login };
     if (typeof parsed.avatarUrl === "string") auth.avatarUrl = parsed.avatarUrl;
-    if (parsed.via === "app" || parsed.via === "paste") auth.via = parsed.via;
     return auth;
   } catch {
     return null;
@@ -38,7 +36,3 @@ export function saveGhAuth(auth: GhAuth): void {
 export function clearGhAuth(): void {
   localStorage.removeItem(KEY);
 }
-
-/** Where to mint a token, with the scope preselected. */
-export const TOKEN_URL =
-  "https://github.com/settings/tokens/new?scopes=public_repo&description=Mend%20(rounds.inevitable.fyi)";

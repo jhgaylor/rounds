@@ -27,27 +27,38 @@ opposite defaults, because nobody is watching when it runs.
    audit — the findings must be gone, the merge-worthy count must not have gone
    up, and every touched file must still parse. **If verification fails it
    abandons the cluster and opens nothing.**
-6. **Open one pull request per file**, with the rules cited and the before/after
-   counts in the body.
+6. **Propose one pull request per file** — the agent sends the fixed files to
+   this app's server, which checks them against the repo's policy and its own
+   history and opens the pull request. The agent cannot push; see
+   [The credential](#the-credential).
 7. **Report** a `round` block, which is what this app renders.
 
 State lives in GitHub, not in a database: the branch name (`rounds/<file-key>`)
 plus a marker in the PR body are how a later round recognises its own work. That
-is Dependabot's trick and it means nothing to keep in sync.
+is Dependabot's trick and it means nothing to keep in sync. Both are written by
+the server, so neither can be forgotten or forged by a round.
 
 ## The rules it runs under
 
-Written into the agent's prompt (`src/lib/spec.ts`), because an unattended bot
-that is wrong is worse than no bot at all:
+An unattended bot that is wrong is worse than no bot at all. These are in the
+agent's prompt (`src/lib/spec.ts`) **and**, for the ones that matter, in the
+server that does the writing (`server/propose.ts`) — because a prompt is not a
+boundary, and the agent spends its round reading files out of a repository it
+does not control:
 
-- Never reopen what a human closed.
-- Never open a second pull request for something already proposed.
-- Never touch anything outside the fix — no reformatting, no drive-by edits.
-- Never force-push, never touch a branch that is not `rounds/*`, never comment
-  on or close a pull request it did not open.
-- At most **3** rounds pull requests open at once; over the cap it opens nothing
-  and says so.
-- A clean round is a good round. When in doubt, open nothing and explain why.
+| rule | enforced where |
+|---|---|
+| Never reopen what a human closed | **server** — a closed-unmerged `rounds/*` PR refuses that cluster forever |
+| Never open a second pull request for something already proposed | **server** — an open one on the branch refuses |
+| Never write outside `rounds/*` | **server** — the branch is derived from the cluster key, never sent |
+| At most **3** open at once (or your `max_open_prs`) | **server** — counted before anything is written |
+| `enabled: false` means nothing happens | **server** — refuses every proposal |
+| Never touch anything outside the fix — no reformatting, no drive-by edits | prompt |
+| A clean round is a good round: when in doubt, propose nothing and explain why | prompt |
+
+A refusal is not a failure. The round records it against the cluster —
+`already-open`, `declined`, `deferred` — and moves on, which is exactly what
+the app renders.
 
 By default it only auto-opens the **mechanical** tier — chant's deterministic
 findings, where the fix is known rather than judged. Tick *"also propose the
@@ -74,8 +85,9 @@ bun install
 bun run dev        # http://localhost:5181
 ```
 
-Sign in with Fountain (or paste an API key), then enrol a repo and pick a
-cadence. Server-side requirements, same as any external Fountain client:
+Sign in with Fountain (or paste an API key), sign in with GitHub, install the
+App, then enrol a repo and pick a cadence. Server-side requirements, same as any
+external Fountain client:
 
 ```
 API_CORS_ORIGINS=http://localhost:5181
@@ -84,52 +96,73 @@ OAUTH_CLIENTS='[{"id":"rounds","name":"Rounds","redirect_uris":["http://localhos
 
 ## The credential
 
-Rounds pushes and opens pull requests with nobody present, so unlike Mend there
-is no browser to hold a credential at run time. There are three ways it can be
-armed, and the narrowest one wins:
+Rounds proposes pull requests with nobody present, so unlike Mend there is no
+browser to hold a credential at run time. There is **one** way it is armed, and
+the shape of it is the point:
 
-| what the agent carries | what it is | when |
+| who | holds | can |
 |---|---|---|
-| a **grant** in the repo's vault | a signed note that you authorised work on that repo — not a GitHub credential on its own | **the default**, once you sign in with GitHub |
-| a **token** in the repo's vault | a standing GitHub token, scoped to that repo | no App, or a host other than GitHub |
-| a token on the shared environment | a standing token for every enrolled repo | convenience |
+| the repo's agent | a **grant** in its own vault — a signed note that you authorised work on that repo, not a GitHub credential | trade it for a **read-only** token: clone, and nothing else |
+| this app's server | the GitHub App's private key | mint a write token, for one repository, for the length of one proposal |
 
-**Sign in with GitHub** and enrolling a repository asks this deployment's own
-backend for a grant. Each round the agent trades that grant for an installation
-token that lasts an hour and reaches exactly one repository — so nothing
-standing is ever stored, and revoking is uninstalling the App rather than
-hunting down a token.
+The agent spends its round reading configuration files out of a repository
+whose contents it does not control. So it holds nothing that can write. When it
+has a fix it has verified, it sends the changed files to `POST /gh/propose` and
+the server commits them, names the branch and opens the pull request — having
+first checked the repository's `.rounds.yml`, its open-PR count, and whether a
+human already closed that cluster unmerged.
 
-It also unlocks the findings that matter most: a token minted from the App
-carries **`workflows: write`**, so the agent may fix `.github/workflows`. A bare
-personal token cannot, unless it was minted with the `workflow` scope.
+There is deliberately no way to hand it a personal access token instead. That
+path existed, in three variants, and every one of them ended with a standing
+credential that could push sitting next to an agent reading untrusted input.
+
+**Sign in with GitHub**, install the App on the account that owns the repos, and
+enrolling asks this deployment's backend for a grant. Nothing standing is ever
+stored, and revoking is uninstalling the App rather than hunting down a token.
+
+It also unlocks the findings that matter most: the App holds
+**`workflows: write`**, so the server may commit fixes to `.github/workflows`.
+A personal token cannot, unless it was minted with the `workflow` scope.
 
 ### Why there is a server here
 
+Two reasons, and the second is the one that changed.
+
 An App's private key mints installation tokens for *every* installation of the
-App, which makes it far too broad to sit on a Fountain environment where an
-agent that reads untrusted repository content could reach it. So Bun serves the
-built SPA **and** the four endpoints that need a secret — same image, same
-origin, no CORS, nothing extra to deploy:
+App, which makes it far too broad to sit on a Fountain environment an agent can
+reach. And the rules that make an unattended bot bearable — never reopen what a
+human closed, never exceed the cap, never write outside `rounds/*` — are worth
+nothing if the only thing enforcing them is a paragraph in a prompt held by
+something that reads attacker-controlled files all day.
+
+So Bun serves the built SPA **and** the endpoints that need either a secret or a
+guarantee — same image, same origin, no CORS, nothing extra to deploy:
 
 ```
-GET  /gh/app        what the App is, so the UI can offer to install it
-GET  /gh/callback   finishes "Sign in with GitHub"
-POST /gh/grant      mints a grant, after checking you can push there
-POST /gh/token      trades a grant for a one-hour, one-repo token
+GET  /gh/app            what the App is, so the UI can offer to install it
+GET  /gh/callback       finishes "Sign in with GitHub"
+POST /gh/installations  where you have the App installed — the gate on enrolling
+POST /gh/grant          mints a grant, after checking you can push there
+POST /gh/token          trades a grant for a one-hour, one-repo, READ-ONLY token
+POST /gh/state          what a round needs before it decides: HEAD, policy, its own past PRs
+POST /gh/propose        the only path that writes
 ```
 
-Both minting paths verify the caller can actually push to the repository first;
-without that, asking for a grant would be a way to borrow the App's access to
-someone else's repo. Grants are HMAC-signed rather than stored, so there is no
-database — and revocation still works, because it lives at GitHub.
+Everything a round calls is authorised by its grant, and the repository is read
+off the grant's **signature** — never off the request. A round that asked to
+propose against another repository would be asking with a grant that does not
+say so, and would be refused before GitHub was called at all.
 
-With no App configured, `/gh` answers 503 and everything falls back to tokens.
+Grants are HMAC-signed rather than stored, so there is no database — and
+revocation still works, because it lives at GitHub.
+
+With no App configured, `/gh` answers 503 and nothing can be enrolled. There is
+no fallback any more, by design.
 
 ## Development
 
 ```bash
-bun test           # cron, round protocol, host parsing, ACP blocks, SSE, render smoke
+bun test           # grants, propose enforcement, .rounds.yml, cron, protocol, hosts, ACP, SSE, render
 bun run typecheck
 bun run build
 ```
@@ -138,8 +171,8 @@ To work without a live Fountain, run the mock (`bun run mock`), start the app
 with `FOUNTAIN_PROXY=http://localhost:8790 bun run dev`, and use
 `http://localhost:5181` as the Fountain URL with any string as the key. It
 serves one enrolled repo with three rounds behind it, covering every cluster
-status the UI renders. Flip `secrets` to `[]` in `mock/server.ts` to develop
-against the missing-token gate.
+status the UI renders. The `/gh` endpoints need a real GitHub App, so enrolling
+against the mock stops at the install gate.
 
 No state outside the browser: settings in `localStorage` (`rounds.settings`).
 Everything else — which repos are enrolled, their cadence, every past round —
