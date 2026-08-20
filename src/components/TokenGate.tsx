@@ -14,12 +14,26 @@ export function TokenGate(props: {
   /** null while unknown, true/false once the environment's keys have been read. */
   present: boolean | null;
   saving: boolean;
+  /** This repo has its own vault token, so the shared one does not gate it. */
+  overridden?: boolean;
   onSave: (token: string) => void;
 }) {
   const [value, setValue] = useState("");
   const [open, setOpen] = useState(false);
 
   if (props.present === null) return null;
+
+  // A repo with its own vault token needs nothing from the shared environment.
+  if (props.overridden) {
+    return (
+      <div className="tokenrow ok">
+        <span className="dot on" />
+        <span className="fineprint">
+          This repository has its own <code>{TOKEN_KEY}</code> in a vault, which overrides the shared one.
+        </span>
+      </div>
+    );
+  }
 
   if (props.present) {
     return (

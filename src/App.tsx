@@ -29,6 +29,8 @@ import {
   scheduleName,
   systemPrompt,
   TOKEN_KEY,
+  vaultDescription,
+  vaultName,
   type RoundsPolicy,
 } from "./lib/spec";
 import { Connect } from "./components/Connect";
@@ -303,8 +305,26 @@ export function App() {
     [client, ensureEnvironment, say],
   );
 
+  /** A repository's own vault — a token scoped to it, overriding any shared one. */
+  const ensureVault = useCallback(
+    async (ref: RepoRef, token: string): Promise<string | undefined> => {
+      if (!client) return undefined;
+      try {
+        const name = vaultName(ref);
+        const existing = (await client.listVaults()).find((v) => v.name === name);
+        const vault = existing ?? (await client.createVault({ name, description: vaultDescription(ref) }));
+        await client.putVaultSecret(vault.id, TOKEN_KEY, token);
+        return vault.id;
+      } catch (err) {
+        say(`Could not store the token: ${describeError(err)}`);
+        return undefined;
+      }
+    },
+    [client, say],
+  );
+
   const enroll = useCallback(
-    async (input: string, cron: string, policy: RoundsPolicy) => {
+    async (input: string, cron: string, policy: RoundsPolicy, token?: string) => {
       if (!client) return;
       const ref = parseRepoInput(input);
       if (!ref) {
@@ -323,6 +343,7 @@ export function App() {
       setAdding(key);
       try {
         const environmentId = await ensureEnvironment();
+        const vaultId = token ? await ensureVault(ref, token) : undefined;
         const name = agentName(ref);
         const want = systemPrompt(ref, policy);
         let agent = (await client.listAgents(name)).find((a) => a.name === name);
@@ -341,7 +362,12 @@ export function App() {
             ...(environmentId ? { environment_id: environmentId } : {}),
           });
         }
-        await client.addTeammate({ agent_id: agent.id, name, ...(environmentId ? { environment_id: environmentId } : {}) });
+        await client.addTeammate({
+          agent_id: agent.id,
+          name,
+          ...(environmentId ? { environment_id: environmentId } : {}),
+          ...(vaultId ? { vault_id: vaultId } : {}),
+        });
         await client.createSchedule(agent.id, {
           name: scheduleName(ref),
           cron,
@@ -357,7 +383,7 @@ export function App() {
         setAdding(null);
       }
     },
-    [client, enrolled, ensureEnvironment, refresh, say],
+    [client, enrolled, ensureEnvironment, ensureVault, refresh, say],
   );
 
   const runNow = useCallback(
@@ -499,6 +525,11 @@ export function App() {
               ) : (
                 <span className="fineprint">no schedule — this repo will not run on its own</span>
               )}
+              {current.teammate.conversation.vault_id && (
+                <span className="private" title={`Cloning and pushing with the token in ${vaultName(current.ref)}`}>
+                  private · own token
+                </span>
+              )}
               <div className="head-actions">
                 <button disabled={busy || running || !current.schedule} onClick={() => void runNow(current)}>
                   {running ? "Running…" : "Run now"}
@@ -515,7 +546,12 @@ export function App() {
             </header>
 
             <div className="scroll">
-              <TokenGate present={tokenPresent} saving={savingToken} onSave={(t) => void saveToken(t)} />
+              <TokenGate
+                present={tokenPresent}
+                saving={savingToken}
+                overridden={current.teammate.conversation.vault_id !== null}
+                onSave={(t) => void saveToken(t)}
+              />
               {current.schedule?.last_error && (
                 <div className="status-card failed">
                   <p>Last scheduled run failed: {current.schedule.last_error}</p>
@@ -542,7 +578,7 @@ export function App() {
               <p className="fineprint">
                 It runs whether or not this page is open. You meet the work on GitHub.
               </p>
-              <EnrollForm big disabled={adding !== null} onEnroll={(v, c, p) => void enroll(v, c, p)} />
+              <EnrollForm big disabled={adding !== null} onEnroll={(v, c, p, t) => void enroll(v, c, p, t)} />
               {pending && (
                 <p className="fineprint">
                   Enrolling <code>{pending}</code>…
@@ -551,25 +587,29 @@ export function App() {
             </div>
           </div>
         )}
-        {current && <EnrollForm disabled={adding !== null} onEnroll={(v, c, p) => void enroll(v, c, p)} />}
+        {current && <EnrollForm disabled={adding !== null} onEnroll={(v, c, p, t) => void enroll(v, c, p, t)} />}
       </main>
     </div>
   );
 }
 
 function EnrollForm(props: {
-  onEnroll: (repo: string, cron: string, policy: RoundsPolicy) => void;
+  onEnroll: (repo: string, cron: string, policy: RoundsPolicy, token?: string) => void;
   disabled: boolean;
   big?: boolean;
 }) {
   const [value, setValue] = useState("");
   const [cron, setCron] = useState(DEFAULT_CRON);
   const [judgement, setJudgement] = useState(false);
+  const [token, setToken] = useState("");
+  const [showToken, setShowToken] = useState(false);
   const submit = (e: FormEvent) => {
     e.preventDefault();
     if (!value.trim()) return;
-    props.onEnroll(value.trim(), cron, { ...DEFAULT_POLICY, includeNeedsReview: judgement });
+    props.onEnroll(value.trim(), cron, { ...DEFAULT_POLICY, includeNeedsReview: judgement }, token.trim() || undefined);
     setValue("");
+    setToken("");
+    setShowToken(false);
   };
   return (
     <form className={props.big ? "enroll big" : "enroll"} onSubmit={submit}>
@@ -599,6 +639,27 @@ function EnrollForm(props: {
           mechanical ones. More value, more to review.
         </span>
       </label>
+      {showToken ? (
+        <div className="tokenfield">
+          <input
+            type="password"
+            value={token}
+            onChange={(e) => setToken(e.target.value)}
+            placeholder="token for this repository"
+            disabled={props.disabled}
+            aria-label="repository token"
+          />
+          <p className="fineprint">
+            Kept in a vault of its own and bound to this repository's agent — it overrides the shared token for this
+            repo alone. Needed for a private repository, and the better shape for any of them: scope it to{" "}
+            <b>this repository only</b>, since the agent reads untrusted repository content while holding it.
+          </p>
+        </div>
+      ) : (
+        <button type="button" className="linkish" onClick={() => setShowToken(true)} disabled={props.disabled}>
+          private repository, or want a token scoped to just this one?
+        </button>
+      )}
     </form>
   );
 }

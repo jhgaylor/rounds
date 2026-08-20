@@ -288,3 +288,8 @@ select { font: inherit; font-size: 13px; color: var(--text); background: var(--b
 .head-actions { margin-left: auto; display: flex; gap: 8px; align-items: center; }
 .paused { font-style: normal; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
 .hero-card h1 b { color: var(--brand); font-weight: 700; }
+
+/* ── per-repo credentials ────────────────────────────────────────────────── */
+.tokenfield { display: flex; flex-direction: column; gap: 6px; }
+.tokenfield input { font-family: var(--mono); font-size: 12.5px; }
+.private { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--brand); border: 1px solid var(--brand); border-radius: 999px; padding: 1px 8px; cursor: help; }

@@ -10,7 +10,7 @@
  * be conservative, because an unattended bot that is wrong is worse than no
  * bot at all.
  */
-import { cloneUrl, parseRefKey, refKey, refLabel, repoUrl, type RepoRef } from "./hosts";
+import { authedCloneUrl, cloneUrl, parseRefKey, refKey, refLabel, repoUrl, type RepoRef } from "./hosts";
 
 export const AGENT_NAME_PREFIX = "Rounds: ";
 
@@ -35,8 +35,26 @@ export const PR_MARKER = "rounds:cluster=";
 
 export const ENVIRONMENT_NAME = "Rounds toolkit";
 
-/** The secret the agent needs to push and open pull requests. */
+/** The secret the agent needs to clone, push and open pull requests. */
 export const TOKEN_KEY = "GITHUB_TOKEN";
+
+/**
+ * A repository's own vault, holding only its token.
+ *
+ * The toolkit environment can carry one shared token for convenience, but a
+ * vault is the better shape and wins: Fountain merges vault values over
+ * environment ones, and a vault binds to a single conversation. So a per-repo
+ * token overrides the shared one for that repo alone — which is what you want
+ * for a private repository, and what keeps an agent that reads untrusted
+ * content from holding a credential for everything else you own.
+ */
+export function vaultName(ref: RepoRef): string {
+  return `Rounds: ${refKey(ref)}`;
+}
+
+export function vaultDescription(ref: RepoRef): string {
+  return `${TOKEN_KEY} for ${refLabel(ref)} — used by its rounds agent to clone, push and open pull requests. Scope it to this repository only.`;
+}
 
 export const CHANT_PACKAGES = [
   "@intentius/chant",
@@ -102,6 +120,7 @@ export function systemPrompt(ref: RepoRef, policy: RoundsPolicy = DEFAULT_POLICY
   const label = refLabel(ref);
   const url = repoUrl(ref);
   const clone = cloneUrl(ref);
+  const authed = authedCloneUrl(ref, `$${TOKEN_KEY}`);
   const slug = `${ref.owner}/${ref.name}`;
   const tiers = policy.includeNeedsReview
     ? "quick wins (merge-worthy + deterministic) **and** needs-review findings (merge-worthy + guidance)"
@@ -124,11 +143,16 @@ Your job each round: find what chant flags, open a pull request for the part tha
 
 ### 1. Refresh
 
+Your remote is \`${authed}\` when \`$${TOKEN_KEY}\` is set — which it must be for a private repository, and which is also what you push with — and \`${clone}\` otherwise.
+
 \`\`\`
-[ -d ~/work/repo/.git ] || git clone --depth 50 ${clone} ~/work/repo
-cd ~/work/repo && git fetch --depth 50 origin && git checkout -B base origin/HEAD && git reset --hard origin/HEAD
+[ -d ~/work/repo/.git ] || git clone --depth 50 <that remote> ~/work/repo
+cd ~/work/repo && git remote set-url origin <that remote>
+git fetch --depth 50 origin && git checkout -B base origin/HEAD && git reset --hard origin/HEAD
 \`\`\`
-Record the commit: \`git rev-parse HEAD\`. If the clone fails the repository is gone or private — report a round with \`"error"\` set and stop.
+Record the commit: \`git rev-parse HEAD\`. If this fails the repository is gone, or it is private and the token cannot see it — report a round with \`"error"\` set saying which, and stop.
+
+The token is a credential in a URL: never print it, never echo a command with it expanded, never write it into a file inside the clone, and never send it anywhere but this repository's remote and api.github.com. Refer to it only as \`$${TOKEN_KEY}\`.
 
 ### 2. Read the repo's own policy
 

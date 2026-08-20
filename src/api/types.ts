@@ -128,3 +128,11 @@ export interface SecretKey {
   inserted_at?: string;
   updated_at?: string;
 }
+
+/** A free-floating bag of env-var overrides, attachable to one conversation. */
+export interface Vault {
+  id: string;
+  name: string;
+  description?: string | null;
+  secret_count?: number;
+}

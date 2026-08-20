@@ -75,3 +75,19 @@ describe("relativeTime", () => {
     expect(relativeTime("not a date", now)).toBe("unknown");
   });
 });
+
+describe("the credential never leaks into the prompt", () => {
+  test("the rendered system prompt names the variable, never a value", async () => {
+    const { systemPrompt, vaultName, TOKEN_KEY } = await import("./spec");
+    const p = systemPrompt({ host: "github.com", owner: "o", name: "r" });
+    expect(p).toContain("$GITHUB_TOKEN@github.com/o/r.git");
+    expect(p).toContain("never print it");
+    expect(p).toContain("never echo a command with it expanded");
+    // The prompt is generated from a ref alone, so there is nowhere for a real
+    // token to enter it — assert the only occurrences are the shell variable.
+    const occurrences = p.split(TOKEN_KEY).length - 1;
+    expect(occurrences).toBeGreaterThan(0);
+    expect(p).not.toMatch(/gh[ps]_[A-Za-z0-9]{16,}/);
+    expect(vaultName({ host: "github.com", owner: "o", name: "r" })).toBe("Rounds: github.com/o/r");
+  });
+});

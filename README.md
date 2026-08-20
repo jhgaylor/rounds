@@ -2,14 +2,14 @@
 
 **Dependabot, for the configuration rather than the dependencies.**
 
-Enrol a repository and [`chant audit`](https://intentius.io/chant/cli/audit/)
-runs over its CI workflows, Kubernetes manifests, Dockerfiles, Helm charts and
-cloud templates on a schedule. When it finds something worth a pull request, an
+Enrol a repository — public or private — and
+[`chant audit`](https://intentius.io/chant/cli/audit/) runs over its CI
+workflows, Kubernetes manifests, Dockerfiles, Helm charts and cloud templates on
+a schedule. When it finds something worth a pull request, an
 agent fixes it, verifies the fix, and opens one. You meet the work on GitHub.
 
 This is [Mend](https://github.com/jhgaylor/mend)'s ambient sibling. Mend is the
-interactive version: you point it at any public repo, watch it work, and take a
-patch. Rounds is the version you turn on and forget — same audit, same agent,
+interactive version: you point it at a repo, watch it work, and take a patch. Rounds is the version you turn on and forget — same audit, same agent,
 opposite defaults, because nobody is watching when it runs.
 
 ## What one round does
@@ -85,19 +85,34 @@ OAUTH_CLIENTS='[{"id":"rounds","name":"Rounds","redirect_uris":["http://localhos
 ## The token
 
 Rounds pushes and opens pull requests with nobody present, so unlike Mend there
-is no browser to hold a credential. The token is a secret on the shared
-**`Rounds toolkit`** Fountain environment: encrypted there, never returned by the
-API, and this page can write it once but never read it back.
+is no browser to hold a credential. It can live in either of two places, and the
+narrower one wins:
+
+| where | scope | when |
+|---|---|---|
+| a **vault** named for the repo, bound to its agent | that one repository | private repos, and the better default for any repo |
+| a secret on the shared **`Rounds toolkit`** environment | every enrolled repo | convenience, when they are all yours anyway |
+
+Fountain merges vault values over environment ones and binds a vault to a single
+conversation, so a per-repo token overrides the shared one **for that repo
+alone**. Add it when enrolling, under *"private repository, or want a token
+scoped to just this one?"*.
+
+Either way it is encrypted in Fountain, never returned by the API, and this page
+can write it once but never read it back.
 
 Use a **fine-grained** token with *Contents: read and write* and *Pull requests:
-read and write*, **scoped to exactly the repositories you enrol**. The agent
-reads untrusted repository content during the audit and holds that token while
-it does, so its blast radius should be the repos you meant and nothing else. For
-anything beyond personal use the right answer is a GitHub App with a per-repo
-installation token rather than a PAT.
+read and write*. The agent reads untrusted repository content during the audit
+and holds that token while it does, so **scope it to exactly the repositories it
+is for** — which is the whole argument for the per-repo vault over the shared
+secret. Beyond personal use the right answer is a GitHub App with a per-repo
+installation token rather than a PAT at all.
 
-Without a token Rounds still audits and reports — it just cannot open anything,
-and the app says so.
+Without any token Rounds still audits and reports — it just cannot clone a
+private repo or open anything, and the app says so.
+
+Note that a vault binds when the teammate is created, so a repo's token has to
+be given at enrolment; to add one later, remove the repo and enrol it again.
 
 ## Development
 

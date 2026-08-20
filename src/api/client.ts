@@ -3,7 +3,7 @@
  * bearer key; every error is an `ApiError` with the server's `error` string
  * when there was one. Ported (slimmed) from jhgaylor/repo-sage / dns-desk.
  */
-import type { Agent, Catalog, Environment, LogEvent, Me, Schedule, SecretKey, Teammate, Turn } from "./types";
+import type { Agent, Catalog, Environment, LogEvent, Me, Schedule, SecretKey, Teammate, Turn, Vault } from "./types";
 import { readSse, type SseMessage } from "../lib/sse";
 import type { Settings } from "../lib/settings";
 
@@ -36,7 +36,8 @@ export class FountainClient {
     return (await this.json<{ data: Teammate[] }>("GET", "/api/team")).data;
   }
 
-  async addTeammate(input: { agent_id: string; name?: string; environment_id?: string }): Promise<Teammate> {
+  /** `vault_id` can only be set here — Fountain has no way to attach one later. */
+  async addTeammate(input: { agent_id: string; name?: string; environment_id?: string; vault_id?: string }): Promise<Teammate> {
     return (await this.json<{ data: Teammate }>("POST", "/api/team", input)).data;
   }
 
@@ -110,6 +111,24 @@ export class FountainClient {
   /** Update an existing agent — used to bring an old agent's system prompt up to date. */
   updateAgent(id: string, input: { system?: string; description?: string }): Promise<Agent> {
     return this.json<{ data: Agent }>("PUT", `/api/agents/${id}`, input).then((r) => r.data);
+  }
+
+  // ── vaults: a per-repo credential, attached to one conversation ───────────
+
+  async listVaults(): Promise<Vault[]> {
+    return (await this.json<{ data: Vault[] }>("GET", "/api/vaults")).data;
+  }
+
+  async createVault(input: { name: string; description?: string }): Promise<Vault> {
+    return (await this.json<{ data: Vault }>("POST", "/api/vaults", input)).data;
+  }
+
+  async listVaultSecretKeys(vaultId: string): Promise<SecretKey[]> {
+    return (await this.json<{ data: SecretKey[] }>("GET", `/api/vaults/${vaultId}/secrets`)).data;
+  }
+
+  putVaultSecret(vaultId: string, key: string, value: string): Promise<unknown> {
+    return this.json("POST", `/api/vaults/${vaultId}/secrets`, { key, value });
   }
 
   // ── schedules: the thing that makes this ambient ──────────────────────────
