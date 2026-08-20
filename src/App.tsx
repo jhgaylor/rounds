@@ -35,6 +35,8 @@ import {
   ENVIRONMENT_NAME,
   environmentSpec,
   refOfAgentName,
+  apiBaseOfPrompt,
+  policyOfPrompt,
   GRANT_KEY,
   ROUND_PROMPT,
   scheduleName,
@@ -216,6 +218,56 @@ export function App() {
     }
     return out.sort((a, b) => a.key.localeCompare(b.key));
   }, [team, schedules]);
+
+  /**
+   * Bring an already-enrolled agent's prompt up to date.
+   *
+   * The prompt is baked in at enrolment and there was no path to change it
+   * afterwards — enrolling a repo that is already on the team just selects it.
+   * That was survivable while prompt changes were cosmetic. It is not now: an
+   * agent still carrying the old prompt would trade its grant for a read-only
+   * token and then try to push with it, failing on a schedule where nobody is
+   * watching.
+   *
+   * Its own choices are read back out of the prompt it is carrying, so this
+   * changes the rules and nothing else — not the tier policy, and not the
+   * deployment it reports to.
+   */
+  const reconciledRef = useRef(new Set<string>());
+  useEffect(() => {
+    if (!client || enrolled.length === 0) return;
+    void (async () => {
+      const stale = enrolled.filter((e) => {
+        if (reconciledRef.current.has(e.teammate.agent_id)) return false;
+        const system = e.teammate.agent.system;
+        if (!system) return false;
+        const want = systemPrompt(e.ref, policyOfPrompt(system), apiBaseOfPrompt(system) ?? window.location.origin);
+        return system !== want;
+      });
+      if (stale.length === 0) return;
+      let updated = 0;
+      for (const e of stale) {
+        // Marked before the call, not after: a failure must not turn into a
+        // retry loop against the same agent every time the roster refreshes.
+        reconciledRef.current.add(e.teammate.agent_id);
+        const system = e.teammate.agent.system!;
+        try {
+          await client.updateAgent(e.teammate.agent_id, {
+            system: systemPrompt(e.ref, policyOfPrompt(system), apiBaseOfPrompt(system) ?? window.location.origin),
+            description: agentDescription(e.ref),
+          });
+          updated += 1;
+        } catch {
+          // Not fatal, and not worth a toast per repo — the round that fails
+          // will say so itself.
+        }
+      }
+      if (updated > 0) {
+        say(`Brought ${updated} agent${updated === 1 ? "" : "s"} up to date — they propose pull requests now instead of pushing.`);
+        await refresh();
+      }
+    })();
+  }, [client, enrolled, refresh, say]);
 
   const current = selected ? enrolled.find((e) => e.key === selected) ?? null : null;
   const convId = current?.teammate.conversation.id ?? null;

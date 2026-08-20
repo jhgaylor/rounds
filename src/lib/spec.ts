@@ -126,6 +126,33 @@ export const DEFAULT_POLICY: RoundsPolicy = { includeNeedsReview: false };
 /** Where this deployment's server lives, for a prompt baked at enrolment time. */
 export const DEFAULT_API_BASE = "https://rounds.inevitable.fyi";
 
+/**
+ * Read an enrolled agent's own choices back out of the prompt it is carrying.
+ *
+ * The prompt is the only record of them — nothing else stores whether a repo
+ * opted into the judgement calls — and they have to survive a rewrite, or
+ * bringing an old agent up to date would quietly change what it does.
+ *
+ * Both of these read the *old* prompt shape as well as the current one, which
+ * is the whole point: they exist to migrate agents enrolled before the server
+ * started doing the writing.
+ */
+export function policyOfPrompt(system: string | null | undefined): RoundsPolicy {
+  return { includeNeedsReview: (system ?? "").includes("needs-review findings (merge-worthy + guidance)") };
+}
+
+/**
+ * The deployment an agent was enrolled against, or null if it cannot be read.
+ *
+ * A rewrite must never repoint an agent at a different server. Without this,
+ * refreshing prompts from a dev session on localhost would send every
+ * production agent's round to a machine that is not listening.
+ */
+export function apiBaseOfPrompt(system: string | null | undefined): string | null {
+  const match = /(https?:\/\/[^\s`]+?)\/gh\/token/.exec(system ?? "");
+  return match ? match[1]! : null;
+}
+
 export function systemPrompt(ref: RepoRef, policy: RoundsPolicy = DEFAULT_POLICY, apiBase: string = DEFAULT_API_BASE): string {
   const label = refLabel(ref);
   const url = repoUrl(ref);

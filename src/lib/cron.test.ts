@@ -101,3 +101,64 @@ describe("the credential never leaks into the prompt", () => {
     expect(p).toContain("You cannot push.");
   });
 });
+
+// Bringing an already-enrolled agent up to date means rewriting the prompt it
+// carries — and the prompt is the only record of two things it must not lose.
+describe("reading an enrolled agent's choices back out of its prompt", () => {
+  // The shape agents enrolled before the rework are actually carrying.
+  const OLD_PROMPT = (tiers: string, endpoint: string) => `You are Rounds for o/r (https://github.com/o/r).
+
+  GITHUB_TOKEN=$(curl -sS -X POST ${endpoint}/gh/token -H 'content-type: application/json' \\
+    -d "$(jq -n --arg g "$ROUNDS_GRANT" '{grant:$g}')" | jq -er .token)
+
+Without that file your policy is: **${tiers}**, at most 3 open pull requests.
+
+git push "https://x-access-token:$GITHUB_TOKEN@github.com/o/r.git" HEAD:refs/heads/rounds/<key>`;
+
+  const OPTED_IN = "quick wins (merge-worthy + deterministic) **and** needs-review findings (merge-worthy + guidance)";
+  const MECHANICAL = "quick wins only (merge-worthy + deterministic)";
+
+  test("the judgement-calls opt-in survives a rewrite", async () => {
+    const { policyOfPrompt } = await import("./spec");
+    expect(policyOfPrompt(OLD_PROMPT(OPTED_IN, "https://rounds.inevitable.fyi")).includeNeedsReview).toBe(true);
+    expect(policyOfPrompt(OLD_PROMPT(MECHANICAL, "https://rounds.inevitable.fyi")).includeNeedsReview).toBe(false);
+  });
+
+  test("it reads back out of the new prompt too, so this keeps working", async () => {
+    const { policyOfPrompt, systemPrompt } = await import("./spec");
+    for (const includeNeedsReview of [true, false]) {
+      const p = systemPrompt({ host: "github.com", owner: "o", name: "r" }, { includeNeedsReview });
+      expect(policyOfPrompt(p).includeNeedsReview).toBe(includeNeedsReview);
+    }
+  });
+
+  test("an agent keeps reporting to the deployment it was enrolled against", async () => {
+    const { apiBaseOfPrompt } = await import("./spec");
+    // The hazard this exists to stop: refreshing prompts from a dev session
+    // would otherwise repoint every production agent at localhost.
+    expect(apiBaseOfPrompt(OLD_PROMPT(MECHANICAL, "https://rounds.inevitable.fyi"))).toBe("https://rounds.inevitable.fyi");
+    expect(apiBaseOfPrompt(OLD_PROMPT(MECHANICAL, "http://localhost:5181"))).toBe("http://localhost:5181");
+  });
+
+  test("the base round-trips through the current prompt", async () => {
+    const { apiBaseOfPrompt, systemPrompt } = await import("./spec");
+    const p = systemPrompt({ host: "github.com", owner: "o", name: "r" }, undefined, "https://rounds.example.com");
+    expect(apiBaseOfPrompt(p)).toBe("https://rounds.example.com");
+  });
+
+  test("an unreadable prompt yields null rather than a wrong answer", async () => {
+    const { apiBaseOfPrompt, policyOfPrompt } = await import("./spec");
+    expect(apiBaseOfPrompt("nothing like a prompt")).toBeNull();
+    expect(apiBaseOfPrompt(null)).toBeNull();
+    expect(policyOfPrompt(null).includeNeedsReview).toBe(false);
+  });
+
+  test("an old prompt genuinely differs from the new one, so the refresh fires", async () => {
+    const { systemPrompt } = await import("./spec");
+    const old = OLD_PROMPT(MECHANICAL, "https://rounds.inevitable.fyi");
+    const want = systemPrompt({ host: "github.com", owner: "o", name: "r" }, { includeNeedsReview: false }, "https://rounds.inevitable.fyi");
+    expect(old).not.toBe(want);
+    expect(old).toContain("git push");
+    expect(want).not.toContain("git push");
+  });
+});
