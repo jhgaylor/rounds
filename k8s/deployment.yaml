@@ -18,7 +18,7 @@ spec:
       containers:
         - name: web
           # Pinned to an immutable sha tag by .github/workflows/build.yml.
-          image: ghcr.io/jhgaylor/rounds:sha-bb01c3375cd9a918557c95226bd2e332adcedda5
+          image: ghcr.io/jhgaylor/rounds:sha-5c2a6e4c0aeb43584dd0eb74a11a088ea420d225
           ports:
             - containerPort: 8080
           # The GitHub App. The only way a round reaches a repository: the
