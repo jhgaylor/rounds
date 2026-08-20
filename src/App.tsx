@@ -45,8 +45,8 @@ import {
   vaultName,
   type RoundsPolicy,
 } from "./lib/spec";
-import { Connect } from "./components/Connect";
 import { InstallGate } from "./components/InstallGate";
+import { Landing } from "./components/Landing";
 import { RoundView } from "./components/RoundView";
 
 const STREAMS = ["acp", "stdout", "stage"];
@@ -575,9 +575,10 @@ export function App() {
   // ── render ────────────────────────────────────────────────────────────────
 
   if (phase === "boot") return <div className="setup" />;
+  // Nobody signed in yet: the landing page, which ends in the sign-in card.
   if (phase === "connect" || !settings || !client)
     return (
-      <Connect
+      <Landing
         error={connectError}
         onPaste={(s) => {
           saveSettings(s);

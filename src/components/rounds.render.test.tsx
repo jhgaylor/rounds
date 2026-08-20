@@ -3,6 +3,7 @@ import { renderToString } from "react-dom/server";
 import { foldRounds } from "../lib/protocol";
 import { RoundView } from "./RoundView";
 import { InstallGate } from "./InstallGate";
+import { FAMILIES, Landing, TIERS, TOTAL } from "./Landing";
 
 const REPO = { host: "github.com", owner: "o", name: "r" } as const;
 
@@ -120,5 +121,52 @@ describe("InstallGate", () => {
     const html = render({ appInfo: { configured: false, slug: null, clientId: null, installUrl: null } });
     expect(html).toContain("no GitHub App configured");
     expect(html).toContain("GRANT_SECRET");
+  });
+});
+
+// The landing page makes numeric claims about what chant catches. They come
+// from chant's audit rules reference, and the failure mode is that they rot
+// quietly — so the arithmetic is pinned rather than trusted.
+describe("Landing", () => {
+  const html = renderToString(<Landing error={null} onPaste={() => {}} />);
+
+  test("the tiers account for every rule, with none double-counted", () => {
+    expect(TIERS.mechanical + TIERS.judgement + TIERS.hygiene).toBe(TOTAL);
+    expect(TOTAL).toBe(244);
+  });
+
+  test("the headline number is the sum of the families, not a number someone typed", () => {
+    expect(FAMILIES.reduce((n, f) => n + f.rules, 0)).toBe(TOTAL);
+    expect(html).toContain(`>${TOTAL}<`);
+  });
+
+  test("every format it audits is named, with where it looks", () => {
+    for (const f of FAMILIES) {
+      expect(html).toContain(f.name);
+      expect(html).toContain(f.where.replace(/&/g, "&amp;"));
+    }
+  });
+
+  test("it is honest that most findings are not auto-opened", () => {
+    // The mechanical tier is small; claiming otherwise would be the easiest
+    // and worst lie on this page.
+    expect(TIERS.mechanical).toBeLessThan(TIERS.judgement);
+    expect(html).toContain("on by default");
+    expect(html).toContain("one checkbox away");
+    expect(html).toContain("never");
+  });
+
+  test("it leads with the pitch and ends with the sign-in, not the other way round", () => {
+    expect(html.indexOf("Nothing watches your configuration")).toBeLessThan(html.indexOf("Sign in with Fountain"));
+  });
+
+  test("it says the agent cannot write, which is the whole trust argument", () => {
+    expect(html).toContain("cannot write to your repository");
+    expect(html).toContain("can only read");
+  });
+
+  test("the sign-in card still works from here", () => {
+    expect(html).toContain("Sign in with Fountain");
+    expect(html).toContain("paste an API key instead");
   });
 });
