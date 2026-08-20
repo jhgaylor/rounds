@@ -82,37 +82,49 @@ API_CORS_ORIGINS=http://localhost:5181
 OAUTH_CLIENTS='[{"id":"rounds","name":"Rounds","redirect_uris":["http://localhost:5181/"]}]'
 ```
 
-## The token
+## The credential
 
 Rounds pushes and opens pull requests with nobody present, so unlike Mend there
-is no browser to hold a credential. It can live in either of two places, and the
-narrower one wins:
+is no browser to hold a credential at run time. There are three ways it can be
+armed, and the narrowest one wins:
 
-| where | scope | when |
+| what the agent carries | what it is | when |
 |---|---|---|
-| a **vault** named for the repo, bound to its agent | that one repository | private repos, and the better default for any repo |
-| a secret on the shared **`Rounds toolkit`** environment | every enrolled repo | convenience, when they are all yours anyway |
+| a **grant** in the repo's vault | a signed note that you authorised work on that repo — not a GitHub credential on its own | **the default**, once you sign in with GitHub |
+| a **token** in the repo's vault | a standing GitHub token, scoped to that repo | no App, or a host other than GitHub |
+| a token on the shared environment | a standing token for every enrolled repo | convenience |
 
-Fountain merges vault values over environment ones and binds a vault to a single
-conversation, so a per-repo token overrides the shared one **for that repo
-alone**. Add it when enrolling, under *"private repository, or want a token
-scoped to just this one?"*.
+**Sign in with GitHub** and enrolling a repository asks this deployment's own
+backend for a grant. Each round the agent trades that grant for an installation
+token that lasts an hour and reaches exactly one repository — so nothing
+standing is ever stored, and revoking is uninstalling the App rather than
+hunting down a token.
 
-Either way it is encrypted in Fountain, never returned by the API, and this page
-can write it once but never read it back.
+It also unlocks the findings that matter most: a token minted from the App
+carries **`workflows: write`**, so the agent may fix `.github/workflows`. A bare
+personal token cannot, unless it was minted with the `workflow` scope.
 
-Use a **fine-grained** token with *Contents: read and write* and *Pull requests:
-read and write*. The agent reads untrusted repository content during the audit
-and holds that token while it does, so **scope it to exactly the repositories it
-is for** — which is the whole argument for the per-repo vault over the shared
-secret. Beyond personal use the right answer is a GitHub App with a per-repo
-installation token rather than a PAT at all.
+### Why there is a server here
 
-Without any token Rounds still audits and reports — it just cannot clone a
-private repo or open anything, and the app says so.
+An App's private key mints installation tokens for *every* installation of the
+App, which makes it far too broad to sit on a Fountain environment where an
+agent that reads untrusted repository content could reach it. So Bun serves the
+built SPA **and** the four endpoints that need a secret — same image, same
+origin, no CORS, nothing extra to deploy:
 
-Note that a vault binds when the teammate is created, so a repo's token has to
-be given at enrolment; to add one later, remove the repo and enrol it again.
+```
+GET  /gh/app        what the App is, so the UI can offer to install it
+GET  /gh/callback   finishes "Sign in with GitHub"
+POST /gh/grant      mints a grant, after checking you can push there
+POST /gh/token      trades a grant for a one-hour, one-repo token
+```
+
+Both minting paths verify the caller can actually push to the repository first;
+without that, asking for a grant would be a way to borrow the App's access to
+someone else's repo. Grants are HMAC-signed rather than stored, so there is no
+database — and revocation still works, because it lives at GitHub.
+
+With no App configured, `/gh` answers 503 and everything falls back to tokens.
 
 ## Development
 

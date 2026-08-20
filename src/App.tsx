@@ -13,6 +13,8 @@ import type { Catalog, LogEvent, Schedule, TeamEvent, Teammate, Turn } from "./a
 import { blocksForTurn } from "./lib/acp";
 import { cronError, describeCron, relativeTime } from "./lib/cron";
 import { parseRepoInput, refKey, refLabel, repoUrl, type RepoRef } from "./lib/hosts";
+import { clearGhAuth, loadGhAuth, saveGhAuth, type GhAuth } from "./lib/ghauth";
+import { beginGithubLogin, completeGithubLoginIfCallback, fetchAppInfo, isGithubCallback, type AppInfo } from "./lib/ghoauth";
 import { completeLoginIfCallback, revoke } from "./lib/oauth";
 import { foldRounds, type RoundEntry } from "./lib/protocol";
 import { clearSettings, loadSettings, saveSettings, type Settings } from "./lib/settings";
@@ -25,6 +27,7 @@ import {
   ENVIRONMENT_NAME,
   environmentSpec,
   refOfAgentName,
+  GRANT_KEY,
   ROUND_PROMPT,
   scheduleName,
   systemPrompt,
@@ -66,6 +69,8 @@ export function App() {
   const [envId, setEnvId] = useState<string | null>(null);
   const [tokenPresent, setTokenPresent] = useState<boolean | null>(null);
   const [savingToken, setSavingToken] = useState(false);
+  const [ghAuth, setGhAuth] = useState<GhAuth | null>(() => loadGhAuth());
+  const [appInfo, setAppInfo] = useState<AppInfo | null>(null);
 
   const client = useMemo(() => (settings ? new FountainClient(settings) : null), [settings]);
   const catalogRef = useRef<Catalog | null>(null);
@@ -78,7 +83,26 @@ export function App() {
   // ── boot ──────────────────────────────────────────────────────────────────
 
   useEffect(() => {
+    void fetchAppInfo().then(setAppInfo);
+  }, []);
+
+  useEffect(() => {
     void (async () => {
+      // Both OAuth flows land here as ?code=…; each claims only the callback
+      // whose state it stashed, so this cannot swallow Fountain's.
+      if (isGithubCallback()) {
+        try {
+          const gh = await completeGithubLoginIfCallback();
+          if (gh) {
+            const auth: GhAuth = { token: gh.token, login: gh.login, via: "app" };
+            saveGhAuth(auth);
+            setGhAuth(auth);
+            say(`Signed in to GitHub as ${gh.login}. Enrol a repository and it will use the App.`);
+          }
+        } catch (err) {
+          say(err instanceof Error ? err.message : String(err));
+        }
+      }
       try {
         const cb = await completeLoginIfCallback();
         if (cb) {
@@ -94,7 +118,7 @@ export function App() {
       if (stored) setSettings(stored);
       else setPhase("connect");
     })();
-  }, []);
+  }, [say]);
 
   useEffect(() => {
     if (settings) setPhase("app");
@@ -307,16 +331,16 @@ export function App() {
 
   /** A repository's own vault — a token scoped to it, overriding any shared one. */
   const ensureVault = useCallback(
-    async (ref: RepoRef, token: string): Promise<string | undefined> => {
+    async (ref: RepoRef, secret: string, key: string = TOKEN_KEY): Promise<string | undefined> => {
       if (!client) return undefined;
       try {
         const name = vaultName(ref);
         const existing = (await client.listVaults()).find((v) => v.name === name);
         const vault = existing ?? (await client.createVault({ name, description: vaultDescription(ref) }));
-        await client.putVaultSecret(vault.id, TOKEN_KEY, token);
+        await client.putVaultSecret(vault.id, key, secret);
         return vault.id;
       } catch (err) {
-        say(`Could not store the token: ${describeError(err)}`);
+        say(`Could not store the credential: ${describeError(err)}`);
         return undefined;
       }
     },
@@ -343,9 +367,22 @@ export function App() {
       setAdding(key);
       try {
         const environmentId = await ensureEnvironment();
-        const vaultId = token ? await ensureVault(ref, token) : undefined;
+        // A grant is preferred over a token: it is not a GitHub credential on
+        // its own, and it is what lets the agent edit .github/workflows.
+        let vaultId: string | undefined;
+        if (ghAuth) {
+          try {
+            const { grant } = await client.requestGrant(ghAuth.token, `${ref.owner}/${ref.name}`);
+            vaultId = await ensureVault(ref, grant, GRANT_KEY);
+          } catch (err) {
+            say(err instanceof Error ? err.message : String(err));
+            return;
+          }
+        } else if (token) {
+          vaultId = await ensureVault(ref, token);
+        }
         const name = agentName(ref);
-        const want = systemPrompt(ref, policy);
+        const want = systemPrompt(ref, policy, `${window.location.origin}/gh/token`);
         let agent = (await client.listAgents(name)).find((a) => a.name === name);
         if (agent) {
           if (agent.system !== want) agent = await client.updateAgent(agent.id, { system: want, description: agentDescription(ref) });
@@ -383,7 +420,7 @@ export function App() {
         setAdding(null);
       }
     },
-    [client, enrolled, ensureEnvironment, ensureVault, refresh, say],
+    [client, enrolled, ensureEnvironment, ensureVault, ghAuth, refresh, say],
   );
 
   const runNow = useCallback(
@@ -451,6 +488,12 @@ export function App() {
     },
     [client, refresh, selected, say],
   );
+
+  const githubSignOut = useCallback(() => {
+    clearGhAuth();
+    setGhAuth(null);
+    say("Signed out of GitHub. Repositories already enrolled keep the grant they were given.");
+  }, [say]);
 
   // ── render ────────────────────────────────────────────────────────────────
 
@@ -546,6 +589,7 @@ export function App() {
             </header>
 
             <div className="scroll">
+              <GithubRow appInfo={appInfo} auth={ghAuth} onSignOut={githubSignOut} />
               <TokenGate
                 present={tokenPresent}
                 saving={savingToken}
@@ -578,6 +622,7 @@ export function App() {
               <p className="fineprint">
                 It runs whether or not this page is open. You meet the work on GitHub.
               </p>
+              <GithubRow appInfo={appInfo} auth={ghAuth} onSignOut={githubSignOut} />
               <EnrollForm big disabled={adding !== null} onEnroll={(v, c, p, t) => void enroll(v, c, p, t)} />
               {pending && (
                 <p className="fineprint">
@@ -589,6 +634,41 @@ export function App() {
         )}
         {current && <EnrollForm disabled={adding !== null} onEnroll={(v, c, p, t) => void enroll(v, c, p, t)} />}
       </main>
+    </div>
+  );
+}
+
+
+/** Who the App will act as, and the offer to sign in when nobody has. */
+function GithubRow(props: { appInfo: AppInfo | null; auth: GhAuth | null; onSignOut: () => void }) {
+  if (!props.appInfo?.configured || !props.appInfo.clientId) return null;
+  if (props.auth) {
+    return (
+      <div className="tokenrow ok">
+        <span className="dot on" />
+        <span className="fineprint">
+          Signed in to GitHub as <b>{props.auth.login}</b>. Repositories you enrol get a grant instead of a stored
+          token, and the App may edit <code>.github/workflows</code>.
+        </span>
+        <button className="linkish" onClick={props.onSignOut}>
+          sign out
+        </button>
+      </div>
+    );
+  }
+  return (
+    <div className="tokenrow warn">
+      <span className="dot warnDot" />
+      <span className="fineprint">
+        Sign in with GitHub and enrolled repositories carry a short-lived grant rather than a standing token — and the{" "}
+        <a href={props.appInfo.installUrl ?? "#"} target="_blank" rel="noreferrer">
+          {props.appInfo.slug}
+        </a>{" "}
+        App can fix <code>.github/workflows</code>, where most findings are.
+      </span>
+      <button className="primary" onClick={() => beginGithubLogin(props.appInfo!.clientId!)}>
+        Sign in with GitHub
+      </button>
     </div>
   );
 }

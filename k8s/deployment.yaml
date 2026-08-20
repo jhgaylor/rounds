@@ -21,6 +21,12 @@ spec:
           image: ghcr.io/jhgaylor/rounds:sha-041b1531f592669364b8d3007db16ba47cc027cb
           ports:
             - containerPort: 8080
+          # The GitHub App. Optional: without it /gh answers 503 and rounds
+          # fall back to a GITHUB_TOKEN on the environment or a repo's vault.
+          envFrom:
+            - secretRef:
+                name: rounds-github-app
+                optional: true
           readinessProbe:
             httpGet: { path: /healthz, port: 8080 }
             initialDelaySeconds: 2
@@ -30,5 +36,5 @@ spec:
             initialDelaySeconds: 5
             periodSeconds: 20
           resources:
-            requests: { cpu: 20m, memory: 96Mi }
-            limits: { memory: 256Mi }
+            requests: { cpu: 20m, memory: 128Mi }
+            limits: { memory: 320Mi }

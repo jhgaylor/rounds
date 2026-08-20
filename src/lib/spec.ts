@@ -39,6 +39,20 @@ export const ENVIRONMENT_NAME = "Rounds toolkit";
 export const TOKEN_KEY = "GITHUB_TOKEN";
 
 /**
+ * The grant a repo's agent carries instead of a GitHub token.
+ *
+ * A grant is a signed statement that a person authorised work on one
+ * repository. It is not a credential to GitHub — on its own it opens nothing —
+ * so an agent holding it while reading untrusted repository content is a much
+ * smaller thing to get wrong than a standing token. Each round it is traded
+ * for an installation token that lasts an hour and reaches one repo.
+ */
+export const GRANT_KEY = "ROUNDS_GRANT";
+
+/** Where that trade happens — this deployment's own backend. */
+export const TOKEN_ENDPOINT_KEY = "ROUNDS_TOKEN_URL";
+
+/**
  * A repository's own vault, holding only its token.
  *
  * The toolkit environment can carry one shared token for convenience, but a
@@ -116,12 +130,13 @@ export interface RoundsPolicy {
 
 export const DEFAULT_POLICY: RoundsPolicy = { includeNeedsReview: false, maxOpenPrs: 3 };
 
-export function systemPrompt(ref: RepoRef, policy: RoundsPolicy = DEFAULT_POLICY): string {
+export function systemPrompt(ref: RepoRef, policy: RoundsPolicy = DEFAULT_POLICY, tokenEndpoint?: string): string {
   const label = refLabel(ref);
   const url = repoUrl(ref);
   const clone = cloneUrl(ref);
   const authed = authedCloneUrl(ref, `$${TOKEN_KEY}`);
   const slug = `${ref.owner}/${ref.name}`;
+  const endpoint = tokenEndpoint ?? "https://rounds.inevitable.fyi/gh/token";
   const tiers = policy.includeNeedsReview
     ? "quick wins (merge-worthy + deterministic) **and** needs-review findings (merge-worthy + guidance)"
     : "quick wins only (merge-worthy + deterministic)";
@@ -143,7 +158,24 @@ Your job each round: find what chant flags, open a pull request for the part tha
 
 ### 1. Refresh
 
-Your remote is \`${authed}\` when \`$${TOKEN_KEY}\` is set — which it must be for a private repository, and which is also what you push with — and \`${clone}\` otherwise.
+#### The credential
+
+Work out your token first; everything else this round uses it.
+
+- If \`$${GRANT_KEY}\` is set, trade it for one. The grant is not a GitHub credential by itself — it is a signed note saying a person authorised work on this repository — so exchange it each round rather than storing what it buys:
+
+  \`\`\`
+  GITHUB_TOKEN=$(curl -sS -X POST ${endpoint} -H 'content-type: application/json' \
+    -d "$(jq -n --arg g "$${GRANT_KEY}" '{grant:$g}')" | jq -er .token)
+  \`\`\`
+
+  If that fails, read the \`error\` from the response and report a round with \`"error"\` set — a 401 means the grant was rejected, a 404 means the GitHub App is no longer installed on this repository (someone removed it, which is a deliberate act and not something to retry around). Never fall back to another credential when a grant is present but refused.
+- Otherwise use \`$${TOKEN_KEY}\` as it is.
+- If neither exists, you can still audit, but you cannot clone a private repository or open anything. Do the audit, report it, and set \`"error"\` to say there is no credential.
+
+A token from a grant belongs to the GitHub App, which holds **workflows: write** — so unlike a bare token it may edit \`.github/workflows\`. That matters: most of chant's best findings are there.
+
+Your remote is \`${authed}\` when a token is in hand — which it must be for a private repository, and which is also what you push with — and \`${clone}\` otherwise.
 
 \`\`\`
 [ -d ~/work/repo/.git ] || git clone --depth 50 <that remote> ~/work/repo

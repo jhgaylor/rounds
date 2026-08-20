@@ -113,6 +113,24 @@ export class FountainClient {
     return this.json<{ data: Agent }>("PUT", `/api/agents/${id}`, input).then((r) => r.data);
   }
 
+  // ── the GitHub App's own backend, served by this same origin ──────────────
+
+  /**
+   * Ask our backend for a grant: a signed note that this person authorised
+   * work on this repo. The agent trades it for a short-lived token each round,
+   * so nothing standing is ever stored.
+   */
+  async requestGrant(githubToken: string, repo: string): Promise<{ grant: string; login: string }> {
+    const res = await fetch("/gh/grant", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ token: githubToken, repo }),
+    });
+    const body = (await res.json().catch(() => ({}))) as { grant?: string; login?: string; error?: string };
+    if (!res.ok || !body.grant) throw new Error(body.error ?? "Could not authorise this repository.");
+    return { grant: body.grant, login: body.login ?? "" };
+  }
+
   // ── vaults: a per-repo credential, attached to one conversation ───────────
 
   async listVaults(): Promise<Vault[]> {
