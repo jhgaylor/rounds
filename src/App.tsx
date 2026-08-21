@@ -608,6 +608,38 @@ export function App() {
     [client, refresh, say],
   );
 
+  /**
+   * Change what a repository lets Rounds propose, after it is enrolled.
+   *
+   * The tier lives in the prompt — it is the only record of it — so changing
+   * it is a rewrite of the same prompt with a different policy. It has to be
+   * changeable from here now that the rail enrolls in one click: a click that
+   * cannot be adjusted afterwards is a click nobody should make.
+   *
+   * The deployment it reports to is read back off the prompt it is carrying,
+   * for the same reason the roster reconcile does it — changing the tier must
+   * never repoint an agent at another server.
+   */
+  const setJudgment = useCallback(
+    async (e: Enrolled, on: boolean) => {
+      if (!client) return;
+      const system = e.teammate.agent.system ?? "";
+      const want = systemPrompt(e.ref, { includeNeedsReview: on }, apiBaseOfPrompt(system) ?? window.location.origin);
+      try {
+        await client.updateAgent(e.teammate.agent_id, { system: want, description: agentDescription(e.ref) });
+        await refresh();
+        say(
+          on
+            ? "Judgment calls are in scope from the next round — it will fix guidance findings too."
+            : "Back to the mechanical fixes only from the next round.",
+        );
+      } catch (err) {
+        say(describeError(err));
+      }
+    },
+    [client, refresh, say],
+  );
+
   const unenroll = useCallback(
     async (e: Enrolled) => {
       if (!client) return;
@@ -754,9 +786,18 @@ export function App() {
                   <p>Last scheduled run failed: {current.schedule.last_error}</p>
                 </div>
               )}
-              {current.schedule && (
-                <CadencePicker cron={current.schedule.cron} onChange={(c) => void setCron(current, c)} />
-              )}
+              {/* What this repository is set to do, both changeable here —
+                  the rail enrolls with the defaults, so this is where they
+                  stop being permanent. */}
+              <div className="settings">
+                {current.schedule && (
+                  <CadencePicker cron={current.schedule.cron} onChange={(c) => void setCron(current, c)} />
+                )}
+                <TierToggle
+                  on={policyOfPrompt(current.teammate.agent.system).includeNeedsReview}
+                  onChange={(v) => void setJudgment(current, v)}
+                />
+              </div>
               <RoundView entries={rounds} repo={current.ref} running={running} />
             </div>
           </>
@@ -769,7 +810,7 @@ export function App() {
               <p>
                 <a href="https://intentius.io/chant/cli/audit/">chant</a> audits the repositories you enroll — CI
                 workflows, Kubernetes manifests, Dockerfiles, Helm charts, cloud templates — and a pull request goes up
-                for what an agent can fix and verify. One PR per file, never a second for something you already have
+                for what Rounds can fix and verify. One PR per file, never a second for something you already have
                 open, and never again for one you closed.
               </p>
               <p className="fineprint">
@@ -784,7 +825,14 @@ export function App() {
                 onSignOut={githubSignOut}
                 onRecheck={() => void checkInstall()}
               />
-              <EnrollForm big disabled={adding !== null} ready={installed === true} onEnroll={(v, c, p) => void enroll(v, c, p)} />
+              {repos.length > 0 ? (
+                <p className="fineprint">
+                  Everything the App can reach is listed on the left — enroll one from there, or install the App on
+                  more repositories to widen the list.
+                </p>
+              ) : (
+                <EnrollForm big disabled={adding !== null} ready={installed === true} onEnroll={(v, c, p) => void enroll(v, c, p)} />
+              )}
               {pending && (
                 <p className="fineprint">
                   Enrolling <code>{pending}</code>…
@@ -793,7 +841,6 @@ export function App() {
             </div>
           </div>
         )}
-        {current && <EnrollForm disabled={adding !== null} ready={installed === true} onEnroll={(v, c, p) => void enroll(v, c, p)} />}
       </main>
     </div>
   );
@@ -841,7 +888,7 @@ function EnrollForm(props: {
       <label className="judgment">
         <input type="checkbox" checked={judgment} onChange={(e) => setJudgment(e.target.checked)} disabled={blocked} />
         <span>
-          Also propose the judgment calls — chant's guidance findings, fixed by the agent rather than only the
+          Also propose the judgment calls — chant's guidance findings, fixed by Rounds rather than only the
           mechanical ones. More value, more to review.
         </span>
       </label>
@@ -850,6 +897,24 @@ function EnrollForm(props: {
         will enroll it.
       </p>
     </form>
+  );
+}
+
+/**
+ * The judgment-call opt-in, after enrollment.
+ *
+ * The valuable half of chant's findings are the ones where the fix depends on
+ * what you meant, and they are opt-in because they are the half that needs
+ * reading. Enrolling from the rail takes the mechanical tier, so this is the
+ * control that makes that choice reversible rather than a decision somebody
+ * made by clicking Enroll.
+ */
+function TierToggle(props: { on: boolean; onChange: (on: boolean) => void }) {
+  return (
+    <label className="tier" title="chant's guidance findings: worth a pull request, but the fix depends on what you meant">
+      <input type="checkbox" checked={props.on} onChange={(e) => props.onChange(e.target.checked)} />
+      <span>Also propose the judgment calls</span>
+    </label>
   );
 }
 

@@ -335,6 +335,10 @@ a.buttonish { font: inherit; border-radius: 7px; padding: 6px 12px; text-decorat
   background: var(--brand); border: 1px solid var(--brand); color: #fff; }
 a.buttonish:hover { background: var(--brand-hover); }
 @media (prefers-color-scheme: dark) { a.buttonish { color: #1a1512; } }
+/* What this repository is set to do: when it runs, and what it may propose. */
+.settings { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.tier { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-2); }
+.tier input { margin: 0; }
 .cadence { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; }
 .cadence .cronin { font-family: var(--mono); font-size: 12.5px; width: 140px; }
 select { font: inherit; font-size: 13px; color: var(--text); background: var(--bg-1); border: 1px solid var(--border); border-radius: 7px; padding: 6px 8px; }
