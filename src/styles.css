@@ -396,6 +396,9 @@ select { font: inherit; font-size: 13px; color: var(--text); background: var(--b
 
 .lp-tiers { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; align-items: start; }
 .lp-tier { background: var(--bg-1); border: 1px solid var(--border); border-radius: 11px; padding: 18px 20px; display: flex; flex-direction: column; gap: 10px; }
+/* Green means "this becomes a pull request without you asking", which is both
+   merge-worthy tiers. It marked only the mechanical one back when that was the
+   only default, and read as "recommended" rather than "on". */
 .lp-tier.on { border-color: var(--ok); background: var(--ok-soft); }
 .lp-tier.off { opacity: 0.82; }
 .lp-tier h3 { font-size: 18px; letter-spacing: -0.01em; }

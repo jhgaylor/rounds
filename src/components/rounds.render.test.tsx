@@ -281,6 +281,13 @@ describe("Landing", () => {
     }
   });
 
+  // Green is the page's shorthand for "opens a pull request without being
+  // asked". Both merge-worthy tiers do; only one of them used to look it.
+  test("the two default tiers look alike, and the third does not", () => {
+    expect(html.split('class="lp-tier on"')).toHaveLength(3);
+    expect(html).toContain('class="lp-tier off"');
+  });
+
   test("it is honest about which tiers become pull requests", () => {
     // The mechanical tier is small; claiming otherwise would be the easiest
     // and worst lie on this page. And the hygiene tier — the largest thing
