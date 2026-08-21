@@ -21,7 +21,7 @@ opposite defaults, because nobody is watching when it runs.
    whether an unattended tool is useful or a nuisance:
    - a rounds pull request already open for that file → leave it alone
    - one you **closed unmerged** → that is a no; never propose it again,
-     unless you labelled it `rounds:reconsider`
+     unless you labeled it `rounds:reconsider`
    - one that merged and the finding came back → treat it as new
 5. **Fix and verify.** Apply chant's deterministic diffs; for guidance findings,
    make the change only when confident it preserves behavior. Then re-run the

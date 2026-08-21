@@ -318,7 +318,7 @@ export async function propose(app: AppConfig, repo: string, request: ProposeRequ
   // — this is the check that makes the promise in the README true rather than
   // merely intended.
   //
-  // Unless that same person labelled it `rounds:reconsider`, which is the one
+  // Unless that same person labeled it `rounds:reconsider`, which is the one
   // way back. It forgives the pull request it is on and nothing else: a later
   // one closed unmerged carries no label, so it declines the cluster again.
   const declined = mine.find((p) => p.state === "closed" && !p.merged && !reconsidered(p.labels));

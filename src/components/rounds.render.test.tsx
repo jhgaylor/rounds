@@ -4,6 +4,7 @@ import { foldRounds } from "../lib/protocol";
 import { RoundView } from "./RoundView";
 import { InstallGate } from "./InstallGate";
 import { FAMILIES, Landing, TIERS, TOTAL } from "./Landing";
+import { isSignInRoute, SignIn, SIGN_IN_ROUTE } from "./SignIn";
 import { RepoPicker } from "./RepoPicker";
 import { keyOfSlug, type AccessibleRepo } from "../lib/repos";
 
@@ -261,7 +262,7 @@ describe("InstallGate", () => {
 // from chant's audit rules reference, and the failure mode is that they rot
 // quietly — so the arithmetic is pinned rather than trusted.
 describe("Landing", () => {
-  const html = renderToString(<Landing error={null} onPaste={() => {}} />);
+  const html = renderToString(<Landing />);
 
   test("the tiers account for every rule, with none double-counted", () => {
     expect(TIERS.mechanical + TIERS.judgment + TIERS.hygiene).toBe(TOTAL);
@@ -289,8 +290,11 @@ describe("Landing", () => {
     expect(html).toContain("off unless you ask");
   });
 
-  test("it leads with the pitch and ends with the sign-in, not the other way round", () => {
-    expect(html.indexOf("Nothing watches your configuration")).toBeLessThan(html.indexOf("Sign in with Fountain"));
+  // Everybody reads the hero; most people read only the hero. It used to be
+  // the one part of the page with nothing to act on.
+  test("the hero asks for the sign-up, and so does the foot", () => {
+    expect(html.split(`href="${SIGN_IN_ROUTE}"`)).toHaveLength(3);
+    expect(html.indexOf("Nothing watches your configuration")).toBeLessThan(html.indexOf(SIGN_IN_ROUTE));
   });
 
   // How the credential is arranged — grants, read-only tokens, which half
@@ -317,9 +321,9 @@ describe("Landing", () => {
     expect(words).toBeLessThan(700);
   });
 
-  test("the sign-in card still works from here", () => {
-    expect(html).toContain("Sign in with Fountain");
-    expect(html).toContain("paste an API key instead");
+  test("the form itself is somewhere else — this page is the pitch", () => {
+    expect(html).not.toContain("Sign in with Fountain");
+    expect(html).not.toContain("paste an API key instead");
   });
 });
 
@@ -383,5 +387,31 @@ describe("RepoPicker", () => {
 
   test("shows nothing at all until GitHub is signed in and the App is on", () => {
     expect(render({ ready: false })).toBe("");
+  });
+});
+
+describe("SignIn", () => {
+  const html = renderToString(<SignIn error={null} onPaste={() => {}} />);
+
+  test("is the form, and a way back to the page that explains it", () => {
+    expect(html).toContain("Sign in with Fountain");
+    expect(html).toContain("paste an API key instead");
+    expect(html).toContain("what Rounds does");
+  });
+
+  test("shows what went wrong on the page that can fix it", () => {
+    expect(renderToString(<SignIn error="That Fountain refused the key." onPaste={() => {}} />)).toContain(
+      "That Fountain refused the key.",
+    );
+  });
+
+  // The landing page's own anchors travel in the same hash. Treating one of
+  // them as a route would drop somebody on the form for clicking a nav link.
+  test("only its own route counts as its route", () => {
+    expect(isSignInRoute(SIGN_IN_ROUTE)).toBe(true);
+    expect(isSignInRoute("#/sign-in/")).toBe(true);
+    expect(isSignInRoute("#what")).toBe(false);
+    expect(isSignInRoute("#tiers")).toBe(false);
+    expect(isSignInRoute("")).toBe(false);
   });
 });

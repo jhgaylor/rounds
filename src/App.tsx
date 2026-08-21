@@ -50,6 +50,7 @@ import {
 import { InstallGate } from "./components/InstallGate";
 import { RepoPicker } from "./components/RepoPicker";
 import { Landing } from "./components/Landing";
+import { isSignInRoute, SignIn } from "./components/SignIn";
 import { RoundView } from "./components/RoundView";
 
 const STREAMS = ["acp", "stdout", "stage"];
@@ -83,6 +84,20 @@ export function App() {
   // back to, so this is the gate on enrolling at all.
   const [installed, setInstalled] = useState<boolean | null>(null);
   const [checkingInstall, setCheckingInstall] = useState(false);
+  /**
+   * The only route this app has: `#/sign-in`, or the landing page.
+   *
+   * A hash rather than a path, so reloading it cannot 404 against a static
+   * host, and `#/`-prefixed so the landing page's own anchors — `#what`,
+   * `#tiers` — stay anchors.
+   */
+  const [hash, setHash] = useState(() => window.location.hash);
+  useEffect(() => {
+    const onHash = () => setHash(window.location.hash);
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
+
   const [ghAuth, setGhAuth] = useState<GhAuth | null>(() => loadGhAuth());
   const [appInfo, setAppInfo] = useState<AppInfo | null>(null);
   // What the App can already reach. Signing in tells us, so enrolling should
@@ -665,17 +680,28 @@ export function App() {
   // ── render ────────────────────────────────────────────────────────────────
 
   if (phase === "boot") return <div className="setup" />;
-  // Nobody signed in yet: the landing page, which ends in the sign-in card.
+  // Nobody signed in yet: the pitch, or the form, depending on the route.
+  //
+  // A failed sign-in lands back here with no hash — the OAuth redirect URI is
+  // origin + path — so an error is also a reason to show the form. Otherwise
+  // the one page that could explain what went wrong is the one page that
+  // never appears.
   if (phase === "connect" || !settings || !client)
-    return (
-      <Landing
+    return isSignInRoute(hash) || connectError !== null ? (
+      <SignIn
         error={connectError}
         onPaste={(s) => {
           saveSettings(s);
           setConnectError(null);
           setSettings(s);
+          // The route has done its job; leaving it set would send a reload
+          // back to a form nobody needs any more.
+          window.history.replaceState({}, "", window.location.pathname + window.location.search);
+          setHash("");
         }}
       />
+    ) : (
+      <Landing />
     );
 
   const pending = adding && !enrolled.some((e) => e.key === adding) ? adding : null;

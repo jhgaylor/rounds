@@ -375,7 +375,10 @@ select { font: inherit; font-size: 13px; color: var(--text); background: var(--b
 .lp-eyebrow { margin: 0 0 14px; font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
 .lp-hero h1 { margin: 0 0 20px; font-size: 46px; line-height: 1.12; letter-spacing: -0.03em; font-weight: 700; }
 .lp-hero h1 b { color: var(--brand); font-weight: 700; }
-.lp-lede { margin: 0; font-size: 17px; line-height: 1.6; color: var(--text-2); max-width: 660px; }
+.lp-lede { margin: 0 0 26px; font-size: 17px; line-height: 1.6; color: var(--text-2); max-width: 660px; }
+.lp-herocta { display: flex; align-items: center; gap: 18px; }
+.lp-herocta a.buttonish { padding: 10px 20px; font-size: 15px; }
+.lp-herocta .linkish { font-size: 14px; }
 @media (max-width: 720px) { .lp-hero h1 { font-size: 32px; } .lp-lede { font-size: 15.5px; } }
 
 .lp-section { padding-top: 56px; padding-bottom: 8px; }
@@ -408,12 +411,14 @@ select { font: inherit; font-size: 13px; color: var(--text); background: var(--b
 
 
 
-.lp-cta { display: grid; grid-template-columns: 1fr minmax(300px, 380px); gap: 40px; align-items: start; padding-top: 64px; padding-bottom: 48px; margin-top: 56px; border-top: 1px solid var(--border); }
+.lp-cta { padding-top: 56px; padding-bottom: 48px; margin-top: 56px; border-top: 1px solid var(--border); }
+.lp-cta a.buttonish { display: inline-block; padding: 10px 20px; font-size: 15px; }
 .lp-cta h2 { margin: 0 0 12px; font-size: 27px; letter-spacing: -0.02em; }
-.lp-cta p { margin: 0 0 12px; color: var(--text-2); line-height: 1.6; }
-.lp-cta .setup-card { width: 100%; }
-.lp-cta .setup-card h3 { color: var(--text-2); text-transform: uppercase; font-size: 11.5px; letter-spacing: 0.08em; }
-@media (max-width: 800px) { .lp-cta { grid-template-columns: 1fr; gap: 24px; } }
+.lp-cta p { margin: 0 0 20px; color: var(--text-2); line-height: 1.6; }
+
+/* Signing in, on its own page: the card, a wordmark, and a way back. */
+.signin { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+.signin .wordmark { text-decoration: none; }
 
 .lp-foot { padding-top: 8px; padding-bottom: 40px; border-top: 1px solid var(--border); }
 .lp-foot .fineprint { padding-top: 20px; }

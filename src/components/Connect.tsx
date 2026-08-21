@@ -3,7 +3,7 @@
  *
  * The pitch that used to sit above these fields is the landing page now, so
  * this is only the form. It is placed by whoever renders it rather than
- * centring itself, because it appears at the end of a long page rather than
+ * centering itself, because it appears at the end of a long page rather than
  * alone on an empty one.
  */
 import { useState, type FormEvent } from "react";

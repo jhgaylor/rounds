@@ -16,11 +16,13 @@
  * a tool whose whole pitch is "it will not waste your attention" cannot spend
  * eight hundred words asking for it.
  *
- * The sign-in card is the last thing on the page, not the first, because there
- * is nothing to sign into until you know what it does.
+ * The form itself is a page of its own (`SignIn`). Keeping it at the bottom of
+ * this one meant the hero — the part everybody reads and most people only read
+ * — had nothing to act on, and anybody who already knew what Rounds was had to
+ * scroll the whole pitch to reach it. So the hero asks, and the foot asks
+ * again for whoever needed the middle.
  */
-import { Connect } from "./Connect";
-import type { Settings } from "../lib/settings";
+import { SIGN_IN_ROUTE } from "./SignIn";
 
 /** What chant audits, and how much of it. Counts from the audit rules reference. */
 export const FAMILIES: Array<{ name: string; where: string; rules: number }> = [
@@ -46,7 +48,7 @@ export const TOTAL = FAMILIES.reduce((n, f) => n + f.rules, 0);
  */
 export const TIERS = { mechanical: 6, judgment: 153, hygiene: 85 } as const;
 
-export function Landing(props: { error: string | null; onPaste: (s: Settings) => void }) {
+export function Landing() {
   return (
     <div className="landing">
       <header className="lp-nav">
@@ -70,6 +72,14 @@ export function Landing(props: { error: string | null; onPaste: (s: Settings) =>
           Workflows, manifests, Dockerfiles, Helm charts and cloud templates drift the way dependencies do. Rounds
           audits them on a schedule, fixes what it can prove it fixed, and opens the pull request.
         </p>
+        <div className="lp-herocta">
+          <a className="buttonish" href={SIGN_IN_ROUTE}>
+            Enroll a repository
+          </a>
+          <a className="linkish" href="#tiers">
+            See what it opens
+          </a>
+        </div>
       </section>
 
       <section className="lp-section" id="what">
@@ -102,7 +112,7 @@ export function Landing(props: { error: string | null; onPaste: (s: Settings) =>
             </div>
             <h3>Mechanical</h3>
             <p>
-              We produce the diff — pin an action to a SHA, an image to a digest, <code>write-all</code> to least
+              We produce the diff: pin an action to a SHA, an image to a digest, <code>write-all</code> to least
               privilege. The edit is known rather than judged, so it goes up exactly as generated.
             </p>
           </div>
@@ -114,11 +124,9 @@ export function Landing(props: { error: string | null; onPaste: (s: Settings) =>
             </div>
             <h3>Judgment calls</h3>
             <p>
-              Things that need fixing, where fixing them costs engineering time — a container that may run as root, a{" "}
-              <code>pull_request_target</code> checking out untrusted code. We spend that time and propose the right
-              fix, then re-run the audit to prove it.
+              A container that may run as root. A <code>pull_request_target</code> checking out untrusted code. Hours
+              of work each, <b>none of them yours</b>. You review the change instead of writing it.
             </p>
-            <p className="fineprint">The valuable half, and the half worth reading before you merge.</p>
           </div>
 
           <div className="lp-tier off">
@@ -150,13 +158,11 @@ max_open_prs: 3`}</code>
       </section>
 
       <section className="lp-cta">
-        <div className="lp-ctacopy">
-          <h2>Turn it on and forget it</h2>
-          <p>
-            Sign in, install the GitHub App where you want it, pick a cadence.
-          </p>
-        </div>
-        <Connect error={props.error} onPaste={props.onPaste} />
+        <h2>Turn it on and forget it</h2>
+        <p>Sign in, install the GitHub App where you want it, pick a cadence.</p>
+        <a className="buttonish" href={SIGN_IN_ROUTE}>
+          Enroll a repository
+        </a>
       </section>
 
       <footer className="lp-foot">
