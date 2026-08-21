@@ -469,6 +469,10 @@ describe("POST /gh/state", () => {
     const fake = fakeGitHub({ policyFile: "max_open_prs: 5\ntiers: [quick-win, needs-review]\nignore:\n  - GHA021\n" });
     const state = await (await postJson(routesWith(fake), "/gh/state", { grant: grantFor() })).json();
     expect(state.policy).toEqual({ enabled: true, tiers: ["quick-win", "needs-review"], ignore: ["GHA021"], pathsIgnore: [], maxOpenPrs: 5 });
+    // A repo with no file has not asked for anything, so what it was enrolled
+    // with stands.
+    const bare = await (await postJson(routesWith(fakeGitHub({ policyFile: null })), "/gh/state", { grant: grantFor() })).json();
+    expect(bare.policy.tiers).toBeNull();
     expect(state.capacity).toBe(5);
   });
 

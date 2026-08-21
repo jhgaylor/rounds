@@ -116,7 +116,7 @@ export function RepoPicker(props: {
         </button>
       )}
       <p className="fineprint">
-        Enrolling takes the weekly cadence and the mechanical fixes only. Both are yours to change afterwards.
+        Enrolling takes the weekly cadence and both merge-worthy tiers. Both are yours to change afterwards.
       </p>
     </div>
   );

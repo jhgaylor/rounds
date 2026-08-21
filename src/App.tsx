@@ -856,7 +856,7 @@ function EnrollForm(props: {
 }) {
   const [value, setValue] = useState("");
   const [cron, setCron] = useState(DEFAULT_CRON);
-  const [judgment, setJudgment] = useState(false);
+  const [judgment, setJudgment] = useState(DEFAULT_POLICY.includeNeedsReview);
   const submit = (e: FormEvent) => {
     e.preventDefault();
     if (!value.trim()) return;
@@ -888,8 +888,8 @@ function EnrollForm(props: {
       <label className="judgment">
         <input type="checkbox" checked={judgment} onChange={(e) => setJudgment(e.target.checked)} disabled={blocked} />
         <span>
-          Also propose the judgment calls — chant's guidance findings, fixed by Rounds rather than only the
-          mechanical ones. More value, more to review.
+          Propose the judgment calls too — the guidance findings, where the fix depends on what you meant. The
+          valuable half, and the half worth reading before you merge.
         </span>
       </label>
       <p className="fineprint">
@@ -901,19 +901,22 @@ function EnrollForm(props: {
 }
 
 /**
- * The judgment-call opt-in, after enrollment.
+ * The judgment calls, on or off, after enrollment.
  *
- * The valuable half of chant's findings are the ones where the fix depends on
- * what you meant, and they are opt-in because they are the half that needs
- * reading. Enrolling from the rail takes the mechanical tier, so this is the
- * control that makes that choice reversible rather than a decision somebody
- * made by clicking Enroll.
+ * They are on by default: the findings where the fix depends on what you meant
+ * are the valuable half, and a bot that fixes only the mechanical ones is
+ * quiet about everything that mattered. Off is still one click, because a
+ * repository where nobody has time to review them is a real repository.
+ *
+ * The hygiene tier is deliberately not here. It is the one nobody wants
+ * unprompted, so it is reachable only from the audited repository's own
+ * `.rounds.yml`.
  */
 function TierToggle(props: { on: boolean; onChange: (on: boolean) => void }) {
   return (
-    <label className="tier" title="chant's guidance findings: worth a pull request, but the fix depends on what you meant">
+    <label className="tier" title="guidance findings: worth a pull request, but the fix depends on what you meant">
       <input type="checkbox" checked={props.on} onChange={(e) => props.onChange(e.target.checked)} />
-      <span>Also propose the judgment calls</span>
+      <span>Propose the judgment calls</span>
     </label>
   );
 }

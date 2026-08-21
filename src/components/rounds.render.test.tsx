@@ -280,13 +280,13 @@ describe("Landing", () => {
     }
   });
 
-  test("it is honest that most findings are not auto-opened", () => {
+  test("it is honest about which tiers become pull requests", () => {
     // The mechanical tier is small; claiming otherwise would be the easiest
-    // and worst lie on this page.
+    // and worst lie on this page. And the hygiene tier — the largest thing
+    // Rounds will not open unprompted — has to say so.
     expect(TIERS.mechanical).toBeLessThan(TIERS.judgment);
     expect(html).toContain("on by default");
-    expect(html).toContain("one checkbox away");
-    expect(html).toContain("never");
+    expect(html).toContain("off unless you ask");
   });
 
   test("it leads with the pitch and ends with the sign-in, not the other way round", () => {
@@ -378,7 +378,7 @@ describe("RepoPicker", () => {
   });
 
   test("says what a one-click enroll commits to, since it does not ask", () => {
-    expect(render()).toContain("weekly cadence and the mechanical fixes only");
+    expect(render()).toContain("weekly cadence and both merge-worthy tiers");
   });
 
   test("shows nothing at all until GitHub is signed in and the App is on", () => {

@@ -121,7 +121,20 @@ export interface RoundsPolicy {
   includeNeedsReview: boolean;
 }
 
-export const DEFAULT_POLICY: RoundsPolicy = { includeNeedsReview: false };
+/**
+ * Both merge-worthy tiers, by default.
+ *
+ * The guidance findings are the valuable half — a container that may run as
+ * root is a better pull request than an unpinned action — and holding them
+ * back by default meant the common case was a bot that fixed the small things
+ * and stayed quiet about the large ones. It is still a checkbox, so a
+ * repository that wants only the mechanical fixes says so.
+ *
+ * The hygiene tier is not here on purpose: it is the one nobody wants
+ * unprompted, so it is reachable only from the audited repository's own
+ * `.rounds.yml`.
+ */
+export const DEFAULT_POLICY: RoundsPolicy = { includeNeedsReview: true };
 
 /** Where this deployment's server lives, for a prompt baked at enrollment time. */
 export const DEFAULT_API_BASE = "https://rounds.inevitable.fyi";
@@ -212,13 +225,17 @@ curl -sS -X POST ${api}/gh/state -H 'content-type: application/json' \\
 That one call gives you everything you would otherwise have to work out:
 
 - \`defaultBranch\` and \`head\` — where the repository is right now;
-- \`policy\` — the repository's own \`.rounds.yml\`, already read and parsed. Honor \`tiers\`, \`ignore\` and \`paths_ignore\` when you choose what to propose. If \`enabled\` is false, do nothing at all this round and report it.
+- \`policy\` — the repository's own \`.rounds.yml\`, already read and parsed. Honor \`ignore\` and \`paths_ignore\` when you choose what to propose, and \`tiers\` as below. If \`enabled\` is false, do nothing at all this round and report it.
 - \`pulls\` — every pull request you have ever opened here, with the \`cluster\` each one belongs to, whether it is open, merged, or closed unmerged, and \`reconsider\`: true when it carries the \`${RECONSIDER_LABEL}\` label;
 - \`capacity\` — how many more this repository will accept before the cap bites.
 
 Do not read \`.rounds.yml\` yourself and do not list pull requests yourself. One parser, one answer.
 
-Without a \`.rounds.yml\` your tier policy is: **${tiers}**.
+Your tier policy is **${tiers}**.
+
+\`policy.tiers\` overrides that when the repository sets it, and \`null\` means it did not — in which case the line above stands. The names are \`quick-win\` (merge-worthy + deterministic), \`needs-review\` (merge-worthy + guidance) and \`report-only\` (the hygiene tier).
+
+**Never propose a report-only finding unless \`policy.tiers\` names \`report-only\`.** That tier is deprecations, style and missing timeouts: real, worth reporting, and not worth a pull request unless the repository has asked for one. It still goes in your round block either way — that is what the report is for.
 
 ### 3. Refresh
 
@@ -345,7 +362,7 @@ End the reply with exactly one round block: valid JSON, one object, nothing else
  "openPrs":2,"error":null}
 \`\`\`
 
-- \`findings\` is every finding chant reported this round — **including the report-only ones**, which never become a pull request but are the difference between "chant found nothing" and "chant found nothing worth a pull request". Same shape as step 8. \`note\` only on the ones you fixed.
+- \`findings\` is every finding chant reported this round — **including the report-only ones**, which become a pull request only if the repository asked for that tier, and are otherwise the difference between "chant found nothing" and "chant found nothing worth a pull request". Same shape as step 8. \`note\` only on the ones you fixed.
 - If there are so many findings that the block would be enormous, send the merge-worthy ones plus as many report-only as fit, and set \`omitted\` to the number you left out.
 - \`status\` is one of \`opened\`, \`already-open\`, \`declined\`, \`deferred\`, \`failed\`, \`clean\`.
 - Include every cluster you considered, including the ones you did nothing about — "nothing to do" needs to be visible.

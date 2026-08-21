@@ -102,6 +102,39 @@ describe("the credential never leaks into the prompt", () => {
   });
 });
 
+// Which findings a round may propose, and which it may only report.
+describe("the tiers a round runs under", () => {
+  const REF = { host: "github.com", owner: "o", name: "r" } as const;
+
+  test("both merge-worthy tiers by default — the judgment calls are the valuable half", async () => {
+    const { DEFAULT_POLICY, systemPrompt } = await import("./spec");
+    expect(DEFAULT_POLICY.includeNeedsReview).toBe(true);
+    expect(systemPrompt(REF)).toContain("needs-review findings (merge-worthy + guidance)");
+  });
+
+  test("unticking it still yields a mechanical-only round", async () => {
+    const { systemPrompt } = await import("./spec");
+    expect(systemPrompt(REF, { includeNeedsReview: false })).toContain("quick wins only (merge-worthy + deterministic)");
+  });
+
+  // The hygiene tier is the one nobody wants unprompted, so no checkbox
+  // reaches it: the audited repository asks for it in its own file or it stays
+  // in the report.
+  test("hygiene is never proposed unless the repository's own file names it", async () => {
+    const { systemPrompt } = await import("./spec");
+    for (const includeNeedsReview of [true, false]) {
+      const p = systemPrompt(REF, { includeNeedsReview });
+      expect(p).toContain("Never propose a report-only finding unless");
+      expect(p).toContain("`report-only`");
+    }
+  });
+
+  test("a repository that says nothing about tiers leaves the enrollment's choice standing", async () => {
+    const { systemPrompt } = await import("./spec");
+    expect(systemPrompt(REF)).toContain("`null` means it did not");
+  });
+});
+
 // Bringing an already-enrolled agent up to date means rewriting the prompt it
 // carries — and the prompt is the only record of two things it must not lose.
 describe("reading an enrolled agent's choices back out of its prompt", () => {

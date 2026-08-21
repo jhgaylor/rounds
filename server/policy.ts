@@ -16,8 +16,21 @@
 export interface Policy {
   /** false → the repository has switched rounds off entirely. */
   enabled: boolean;
-  /** Which tiers may be auto-proposed. */
-  tiers: string[];
+  /**
+   * Which tiers this repository will accept pull requests for, or null when
+   * the file does not say.
+   *
+   * Null is not the same as a default. A repository that has never heard of
+   * `.rounds.yml` has not asked for anything, so the choice made at enrollment
+   * stands; a repository that lists tiers has overridden it. Answering with a
+   * default here instead would mean every repo without the file silently
+   * refusing whatever the person who enrolled it had ticked.
+   *
+   * `quick-win` (deterministic fixes), `needs-review` (guidance fixes), and
+   * `report-only` — the hygiene tier, which is never proposed unless a
+   * repository asks for it here.
+   */
+  tiers: string[] | null;
   /** Rule ids never to propose. */
   ignore: string[];
   /** Globs whose findings are skipped. */
@@ -28,7 +41,7 @@ export interface Policy {
 
 export const DEFAULT_POLICY: Policy = {
   enabled: true,
-  tiers: ["quick-win"],
+  tiers: null,
   ignore: [],
   pathsIgnore: [],
   maxOpenPrs: 3,
@@ -67,7 +80,7 @@ function items(value: string): string[] {
  * absent, is not an error — it means "no policy", which is the default.
  */
 export function parsePolicy(raw: string | null): Policy {
-  const policy: Policy = { ...DEFAULT_POLICY, tiers: [...DEFAULT_POLICY.tiers], ignore: [], pathsIgnore: [] };
+  const policy: Policy = { ...DEFAULT_POLICY, ignore: [], pathsIgnore: [] };
   if (!raw) return policy;
 
   const lines = raw.split(/\r?\n/).map(uncomment);

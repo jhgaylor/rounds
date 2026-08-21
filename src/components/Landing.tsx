@@ -119,27 +119,27 @@ export function Landing(props: { error: string | null; onPaste: (s: Settings) =>
 
           <div className="lp-tier opt">
             <div className="lp-tierhead">
-              <span className="lp-pill">one checkbox away</span>
+              <span className="lp-pill ok">on by default</span>
               <span className="lp-tiern">{TIERS.judgment} rules</span>
             </div>
             <h3>Judgment calls</h3>
             <p>
               Worth a pull request, but the fix depends on what you meant — a container that may run as root, a{" "}
-              <code>pull_request_target</code> checking out untrusted code. Tick the box when you enroll and Rounds
-              makes the change itself.
+              <code>pull_request_target</code> checking out untrusted code. Rounds makes the change and re-runs the
+              audit to prove it.
             </p>
-            <p className="fineprint">The valuable half, and the half that needs reading. Hence opt-in.</p>
+            <p className="fineprint">The valuable half, and the half worth reading before you merge. Untick to skip it.</p>
           </div>
 
           <div className="lp-tier off">
             <div className="lp-tierhead">
-              <span className="lp-pill quiet">never</span>
+              <span className="lp-pill quiet">off unless you ask</span>
               <span className="lp-tiern">{TIERS.hygiene} rules</span>
             </div>
             <h3>Hygiene</h3>
             <p>
-              Deprecations, style, missing timeouts: worth knowing, never worth interrupting you. They appear in the
-              report and nowhere else.
+              Deprecations, style, missing timeouts: worth knowing, rarely worth interrupting you. They stay in the
+              report unless a repository asks for them in its <code>.rounds.yml</code>.
             </p>
           </div>
         </div>
@@ -156,7 +156,7 @@ export function Landing(props: { error: string | null; onPaste: (s: Settings) =>
         </p>
         <pre className="lp-code">
           <code>{`enabled: true              # false → nothing happens at all
-tiers: [quick-win]         # quick-win, needs-review
+tiers: [quick-win]         # quick-win, needs-review, report-only
 ignore: [GHA021]           # rule ids never to propose
 paths_ignore: ["examples/**"]
 max_open_prs: 3`}</code>

@@ -59,6 +59,23 @@ max_open_prs: 1
     expect(parsePolicy("tiers: []\n").tiers).toEqual([]);
   });
 
+  // Null means "this repository has not said", which is not the same as a
+  // default: the tiers chosen at enrollment stand until the file overrides
+  // them. Answering ["quick-win"] here would quietly refuse the judgment calls
+  // for every repository that has never written a .rounds.yml.
+  test("no file, and a file that never mentions tiers, both leave tiers unsaid", () => {
+    expect(parsePolicy(null).tiers).toBeNull();
+    expect(parsePolicy("max_open_prs: 5\n").tiers).toBeNull();
+  });
+
+  test("the hygiene tier is a thing a repository may ask for", () => {
+    expect(parsePolicy("tiers: [quick-win, needs-review, report-only]\n").tiers).toEqual([
+      "quick-win",
+      "needs-review",
+      "report-only",
+    ]);
+  });
+
   test("garbage is not an error — it just means no policy", () => {
     expect(parsePolicy("{{{ not yaml at all")).toEqual(DEFAULT_POLICY);
   });

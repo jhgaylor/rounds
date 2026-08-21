@@ -111,19 +111,29 @@ cannot disagree — not because the agent was careful, but because there is only
 one copy. The agent writes two things: the title, and a one-line `note` per
 finding saying what it changed.
 
-By default it only auto-opens the **mechanical** tier — chant's deterministic
-findings, where the fix is known rather than judged. Tick *"also propose the
-judgment calls"* when enrolling (or set `tiers` in `.rounds.yml`) to let the
-agent take on the guidance findings too. That is the more valuable half and the
-half that needs review, which is exactly why it is opt-in.
+By default it opens pull requests for both merge-worthy tiers: the
+**mechanical** findings, where chant knows the exact edit, and the **judgment
+calls**, where the fix depends on what the repo meant. The second is the more
+valuable half — a container that may run as root beats an unpinned action — so
+holding it back by default meant a bot that fixed the small things and stayed
+quiet about the large ones. Untick *"propose the judgment calls"* when
+enrolling, or later on the repo's own page, for the mechanical tier alone.
+
+The **hygiene** tier is the one nobody wants unprompted, so it is reachable
+only from the audited repository itself: put `report-only` in `tiers` in
+`.rounds.yml` and those findings become pull requests too. Otherwise they
+appear in the report and nowhere else.
 
 ## `.rounds.yml`
 
 Optional, in the audited repo, and it overrides everything above:
 
+An absent `tiers` key is not a policy: what the repo was enrolled with stands.
+Naming any tier replaces that choice entirely.
+
 ```yaml
 enabled: true              # false → the round does nothing at all
-tiers: [quick-win]         # quick-win, needs-review
+tiers: [quick-win]         # quick-win, needs-review, report-only
 ignore: [GHA021]           # rule ids never to propose
 paths_ignore: ["examples/**"]
 max_open_prs: 3
@@ -141,8 +151,7 @@ App, then enroll a repo and pick a cadence. Signing in with GitHub already
 says which repositories the App can reach, so the rail lists them under the
 enrolled ones — recently-pushed first, with a search, and a **skip** that
 keeps one out of the way. Enrolling from there takes the weekly cadence and
-the mechanical tier, both editable afterwards; the box below still takes an
-`owner/name` typed by hand. Server-side requirements, same as any
+both merge-worthy tiers, changeable afterwards on the repo's own page. Server-side requirements, same as any
 external Fountain client:
 
 ```
