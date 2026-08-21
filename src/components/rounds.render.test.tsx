@@ -116,11 +116,24 @@ describe("RoundView", () => {
   /** The same html without React's text-boundary comments or tags, for reading sentences out of it. */
   const stripped = html.replace(/<!-- -->/g, "").replace(/<[^>]+>/g, "");
 
-  test("leads with the counts and the agent's own sentence", () => {
-    expect(html).toContain("Opened one, left the rest.");
+  test("leads with the counts, and with what it looked at", () => {
     expect(html).toContain("main@9f1c4a2");
     expect(html).toContain("19 files");
     expect(html).toContain("awaiting you");
+  });
+
+  // Whatever the round wrote about itself is not the report. The counts come
+  // from the record, so they cannot flatter it or contradict the rows below.
+  test("never renders the reply's prose", () => {
+    expect(html).not.toContain("Opened one, left the rest.");
+    expect(html).not.toContain("Quiet week.");
+  });
+
+  test("counts the failure, and stays quiet about the statuses that did not happen", () => {
+    expect(stripped).toContain("1failed");
+    // Nothing was held back this round. A tile reading "0 held back" every
+    // week is how somebody learns to stop reading the tiles.
+    expect(stripped).not.toContain("held back");
   });
 
   test("shows every status, not just the pull requests it opened", () => {

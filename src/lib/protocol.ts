@@ -120,15 +120,8 @@ export function parseRounds(text: string): Round[] {
   }));
 }
 
-/** The reply with the block removed — the sentence a maintainer would read. */
-export function stripBlocks(text: string): string {
-  return text.replace(FENCE, "").replace(/\n{3,}/g, "\n\n").trim();
-}
-
 export interface RoundEntry {
   round: Round;
-  /** The agent's prose for that round. */
-  prose: string;
   /** When the turn ran, from Fountain — more trustworthy than the agent's own clock. */
   ranAt: string | null;
 }
@@ -137,9 +130,8 @@ export interface RoundEntry {
 export function foldRounds(turns: Array<{ reply: string; ranAt?: string | null }>): RoundEntry[] {
   const out: RoundEntry[] = [];
   for (const turn of turns) {
-    const prose = stripBlocks(turn.reply);
     for (const round of parseRounds(turn.reply)) {
-      out.push({ round, prose, ranAt: turn.ranAt ?? null });
+      out.push({ round, ranAt: turn.ranAt ?? null });
     }
   }
   return out.reverse();
@@ -279,6 +271,27 @@ function clusterKeyOf(path: string): string {
 /** The clusters whose work this round can show a diff for. */
 export function changedClusters(round: Round): Cluster[] {
   return round.clusters.filter((c) => typeof c.diff === "string" && c.diff.trim() !== "");
+}
+
+/**
+ * How many clusters ended in each status.
+ *
+ * The round used to be summarized by whatever sentence came back with it. This
+ * is the same summary taken from the record instead: it cannot flatter the
+ * round, cannot contradict the rows underneath it, and reads the same every
+ * week.
+ */
+export function clusterCounts(round: Round): Record<ClusterStatus, number> {
+  const counts: Record<ClusterStatus, number> = {
+    opened: 0,
+    "already-open": 0,
+    declined: 0,
+    deferred: 0,
+    failed: 0,
+    clean: 0,
+  };
+  for (const c of round.clusters) counts[c.status] += 1;
+  return counts;
 }
 
 /** How a round reads in one line, for the repo list. */

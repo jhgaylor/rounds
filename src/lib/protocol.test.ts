@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { arrangeRound, describeRound, foldRounds, openPullRequests, parseRounds, stripBlocks } from "./protocol";
+import { arrangeRound, clusterCounts, describeRound, foldRounds, openPullRequests, parseRounds } from "./protocol";
 
 const round = (body: string) => `Did a round.\n\n\`\`\`round\n${body}\n\`\`\``;
 
@@ -12,13 +12,12 @@ const FULL = round(`{"at":"2026-08-20T09:00:00Z","commit":"9f1c4a2","branch":"ma
  "openPrs":2,"error":null}`);
 
 describe("parseRounds", () => {
-  test("reads a round and strips it from the prose", () => {
+  test("reads a round out of a reply that has prose around it", () => {
     const [r] = parseRounds(FULL);
     expect(r!.commit).toBe("9f1c4a2");
     expect(r!.summary.quickWin).toBe(3);
     expect(r!.clusters).toHaveLength(3);
     expect(r!.openPrs).toBe(2);
-    expect(stripBlocks(FULL)).toBe("Did a round.");
   });
 
   test("keeps every cluster status, including the ones with no action", () => {
@@ -63,7 +62,6 @@ describe("foldRounds", () => {
     expect(entries).toHaveLength(2);
     expect(entries[0]!.ranAt).toBe("2026-08-20T09:00:00Z");
     expect(entries[0]!.round.clusters).toHaveLength(3);
-    expect(entries[0]!.prose).toBe("Did a round.");
   });
 
   test("turns with no round block contribute nothing", () => {
@@ -180,10 +178,6 @@ describe("round-diff", () => {
     expect(r!.clusters[0]!.diff).toBeUndefined();
   });
 
-  test("diffs are stripped from the prose along with the round block", () => {
-    expect(stripBlocks(REPORTED)).toBe("Did a round.");
-  });
-
   test("an empty diff fence is ignored", () => {
     const [r] = parseRounds(`${round('{"summary":{},"clusters":[{"key":"a","file":"a.yml","status":"opened"}]}')}\n\n\`\`\`round-diff a\n\n\`\`\``);
     expect(r!.clusters[0]!.diff).toBeUndefined();
@@ -213,5 +207,20 @@ describe("arrangeRound", () => {
     const orphaned = arrangeRound(parseRounds(round('{"summary":{},"findings":[],"clusters":[{"key":"dockerfile","file":"Dockerfile","status":"failed","note":"could not verify"}]}'))[0]!);
     expect(orphaned.files).toEqual([]);
     expect(orphaned.orphans.map((c) => c.key)).toEqual(["dockerfile"]);
+  });
+});
+
+// The round used to be summarized by the sentence it wrote about itself. These
+// are the same summary, taken from the record instead.
+describe("clusterCounts", () => {
+  test("counts every status, including the ones nothing happened for", () => {
+    const [r] = parseRounds(FULL);
+    expect(clusterCounts(r!)).toEqual({ opened: 1, "already-open": 1, declined: 1, deferred: 0, failed: 0, clean: 0 });
+  });
+
+  test("a round with no clusters counts zeroes rather than going missing", () => {
+    const [r] = parseRounds(round('{"summary":{"total":4},"clusters":[],"openPrs":0}'));
+    expect(clusterCounts(r!).opened).toBe(0);
+    expect(clusterCounts(r!).failed).toBe(0);
   });
 });

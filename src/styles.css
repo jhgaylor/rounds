@@ -253,7 +253,6 @@ button.tiny { font-size: 11px; padding: 3px 9px; }
 .round, .history { border: 1px solid var(--border); border-radius: 12px; background: var(--bg-1); padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; }
 .round-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
 .round-head .fineprint { margin-left: auto; }
-.round-prose { margin: 0; font-size: 13.5px; color: var(--text-2); white-space: pre-wrap; }
 .tiles { display: flex; gap: 8px; }
 .tile { display: flex; flex-direction: column; align-items: center; min-width: 92px; border: 1px solid var(--border); border-radius: 9px; padding: 6px 10px; background: var(--bg-0); }
 .tile b { font-size: 20px; line-height: 1.1; }

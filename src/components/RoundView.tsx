@@ -18,6 +18,7 @@ import { fileUrl, type RepoRef } from "../lib/hosts";
 import { relativeTime } from "../lib/cron";
 import {
   arrangeRound,
+  clusterCounts,
   RECONSIDER_LABEL,
   ruleDocUrl,
   type Cluster,
@@ -57,7 +58,7 @@ export function RoundView(props: { entries: RoundEntry[]; repo: RepoRef; running
   }
 
   const { round } = latest;
-  const opened = round.clusters.filter((c) => c.status === "opened");
+  const counts = clusterCounts(round);
   const view = arrangeRound(round);
   const branch = round.branch ?? "main";
 
@@ -77,12 +78,17 @@ export function RoundView(props: { entries: RoundEntry[]; repo: RepoRef; running
           <p className="error">{round.error}</p>
         ) : (
           <>
+            {/* What happened, from the record rather than from a sentence the
+                round wrote about itself. The last two only appear when they
+                are not zero: a bot that reports "0 failed" every week is
+                teaching you to stop reading it. */}
             <div className="tiles">
               <Tile n={round.summary.total} label="findings" />
-              <Tile n={opened.length} label="opened" tone={opened.length > 0 ? "ok" : undefined} />
+              <Tile n={counts.opened} label="opened" tone={counts.opened > 0 ? "ok" : undefined} />
               <Tile n={round.openPrs} label="awaiting you" tone={round.openPrs > 0 ? "brand" : undefined} />
+              {counts.deferred > 0 && <Tile n={counts.deferred} label="held back" tone="warn" />}
+              {counts.failed > 0 && <Tile n={counts.failed} label="failed" tone="danger" />}
             </div>
-            {latest.prose && <p className="round-prose">{latest.prose}</p>}
 
             {view.files.length === 0 && view.orphans.length === 0 && (
               <p className="fineprint">Nothing to act on this round.</p>
