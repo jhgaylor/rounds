@@ -282,9 +282,11 @@ describe("Landing", () => {
   });
 
   // Green is the page's shorthand for "opens a pull request without being
-  // asked". Both merge-worthy tiers do; only one of them used to look it.
-  test("the two default tiers look alike, and the third does not", () => {
-    expect(html.split('class="lp-tier on"')).toHaveLength(3);
+  // asked". It lives on the pill, where the status is stated; tinting two of
+  // three cards made it a background rather than a signal.
+  test("the two default tiers are marked on their pills, not their cards", () => {
+    expect(html.split('class="lp-pill ok"')).toHaveLength(3);
+    expect(html).not.toContain('class="lp-tier on"');
     expect(html).toContain('class="lp-tier off"');
   });
 

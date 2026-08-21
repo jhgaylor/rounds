@@ -105,7 +105,7 @@ export function Landing() {
         <p className="lp-sub">We sort every finding into three tiers, and open pull requests for the ones that earn one.</p>
 
         <div className="lp-tiers">
-          <div className="lp-tier on">
+          <div className="lp-tier">
             <div className="lp-tierhead">
               <span className="lp-pill ok">on by default</span>
               <span className="lp-tiern">{TIERS.mechanical} rules</span>
@@ -117,7 +117,7 @@ export function Landing() {
             </p>
           </div>
 
-          <div className="lp-tier on">
+          <div className="lp-tier">
             <div className="lp-tierhead">
               <span className="lp-pill ok">on by default</span>
               <span className="lp-tiern">{TIERS.judgment} rules</span>
