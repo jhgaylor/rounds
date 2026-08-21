@@ -105,16 +105,6 @@ export function Landing(props: { error: string | null; onPaste: (s: Settings) =>
               We produce the diff — pin an action to a SHA, an image to a digest, <code>write-all</code> to least
               privilege. The edit is known rather than judged, so it goes up exactly as generated.
             </p>
-            <pre className="lp-diff">
-              <code>
-                <span className="del">-permissions: write-all</span>
-                {"\n"}
-                <span className="add">+permissions:</span>
-                {"\n"}
-                <span className="add">+  contents: read</span>
-              </code>
-            </pre>
-            <p className="fineprint">Few rules — and the ones that fire in almost every repository.</p>
           </div>
 
           <div className="lp-tier opt">
@@ -124,11 +114,11 @@ export function Landing(props: { error: string | null; onPaste: (s: Settings) =>
             </div>
             <h3>Judgment calls</h3>
             <p>
-              Worth a pull request, but the fix depends on what you meant — a container that may run as root, a{" "}
-              <code>pull_request_target</code> checking out untrusted code. Rounds makes the change and re-runs the
-              audit to prove it.
+              Things that need fixing, where fixing them costs engineering time — a container that may run as root, a{" "}
+              <code>pull_request_target</code> checking out untrusted code. We spend that time and propose the right
+              fix, then re-run the audit to prove it.
             </p>
-            <p className="fineprint">The valuable half, and the half worth reading before you merge. Untick to skip it.</p>
+            <p className="fineprint">The valuable half, and the half worth reading before you merge.</p>
           </div>
 
           <div className="lp-tier off">
@@ -143,10 +133,6 @@ export function Landing(props: { error: string | null; onPaste: (s: Settings) =>
             </p>
           </div>
         </div>
-        <p className="fineprint">
-          One pull request per file, never more than three open at once, and never again for one you closed unmerged.
-          A fix it cannot verify does not go up.
-        </p>
       </section>
 
       <section className="lp-section" id="policy">

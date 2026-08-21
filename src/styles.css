@@ -404,9 +404,7 @@ select { font: inherit; font-size: 13px; color: var(--text); background: var(--b
 .lp-pill.ok { border-color: var(--ok); color: var(--ok); background: var(--bg-1); }
 .lp-pill.quiet { color: var(--muted); }
 
-.lp-diff, .lp-code { font-family: var(--mono); font-size: 12px; line-height: 1.65; background: var(--bg-1); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; overflow-x: auto; margin: 0; }
-.lp-diff .add { color: var(--add); background: var(--add-bg); display: inline-block; width: 100%; }
-.lp-diff .del { color: var(--del); background: var(--del-bg); display: inline-block; width: 100%; }
+.lp-code { font-family: var(--mono); font-size: 12px; line-height: 1.65; background: var(--bg-1); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; overflow-x: auto; margin: 0; }
 .lp-code { white-space: pre; color: var(--text-2); }
 
 

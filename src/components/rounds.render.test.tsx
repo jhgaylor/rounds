@@ -293,14 +293,14 @@ describe("Landing", () => {
     expect(html.indexOf("Nothing watches your configuration")).toBeLessThan(html.indexOf("Sign in with Fountain"));
   });
 
-  // How the credential is arranged is an architecture decision, not a reason
-  // anybody enrolls a repository. What survives here is what it will and will
-  // not do to your repository, which is a promise rather than a mechanism.
-  test("promises what it does, not how it is wired", () => {
-    expect(html).toContain("never more than three open at once");
-    expect(html).toContain("never again for one you closed unmerged");
+  // How the credential is arranged — grants, read-only tokens, which half
+  // holds what — is an architecture decision, not a reason anybody enrolls a
+  // repository. It lives in the README, where somebody evaluating the security
+  // model goes looking.
+  test("never explains how it is wired", () => {
     expect(html).not.toContain("read-only");
     expect(html).not.toContain("grant");
+    expect(html).not.toContain("credential");
   });
 
   // It is a page for buying an outcome, not a tour of the machinery. Naming
