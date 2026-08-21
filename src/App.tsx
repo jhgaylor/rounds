@@ -784,7 +784,7 @@ export function App() {
               </a>
               {current.schedule ? (
                 <span className="fineprint">
-                  {describeCron(current.schedule.cron)}
+                  <CadenceField cron={current.schedule.cron} onChange={(c) => void setCron(current, c)} />
                   {current.schedule.enabled
                     ? ` · next ${relativeTime(current.schedule.next_run_at)}`
                     : " · paused"}
@@ -828,13 +828,10 @@ export function App() {
                   <p>Last scheduled run failed: {current.schedule.last_error}</p>
                 </div>
               )}
-              {/* What this repository is set to do, both changeable here —
-                  the rail enrolls with the defaults, so this is where they
-                  stop being permanent. */}
+              {/* The cadence is in the header now, where it was already
+                  written down. What is left here is the other thing the rail
+                  enrolls with a default for. */}
               <div className="settings">
-                {current.schedule && (
-                  <CadencePicker cron={current.schedule.cron} onChange={(c) => void setCron(current, c)} />
-                )}
                 <TierToggle
                   on={policyOfPrompt(current.teammate.agent.system).includeNeedsReview}
                   onChange={(v) => void setJudgment(current, v)}
@@ -943,6 +940,80 @@ function EnrollForm(props: {
 }
 
 /**
+ * The cadence, edited where it is already stated.
+ *
+ * It used to be a labelled picker further down the page, under the install
+ * gate, while the header said the same thing in words a foot above it. Two
+ * places for one fact, and the one you read was not the one you could change.
+ * So the sentence is the control: click it and it becomes a select, with the
+ * cron field behind "Custom…" for anybody who wants a schedule the presets do
+ * not cover.
+ */
+function CadenceField(props: { cron: string; onChange: (cron: string) => void }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(props.cron);
+  const [custom, setCustom] = useState(false);
+
+  if (!editing) {
+    return (
+      <button
+        className="editable"
+        title="Change when it runs"
+        onClick={() => {
+          setDraft(props.cron);
+          setCustom(!CRON_PRESETS.some((p) => p.cron === props.cron));
+          setEditing(true);
+        }}
+      >
+        {describeCron(props.cron)}
+      </button>
+    );
+  }
+
+  const bad = cronError(draft);
+  return (
+    <span className="cadence-edit">
+      <select
+        value={custom ? "custom" : draft}
+        aria-label="cadence"
+        onChange={(e) => {
+          if (e.target.value === "custom") {
+            setCustom(true);
+          } else {
+            setCustom(false);
+            setDraft(e.target.value);
+          }
+        }}
+      >
+        {CRON_PRESETS.map((preset) => (
+          <option key={preset.cron} value={preset.cron}>
+            {preset.label}
+          </option>
+        ))}
+        <option value="custom">Custom…</option>
+      </select>
+      {custom && (
+        <input value={draft} onChange={(e) => setDraft(e.target.value)} aria-label="cron expression" className="cronin" />
+      )}
+      <button
+        className="primary tiny"
+        disabled={!!bad || draft === props.cron}
+        onClick={() => {
+          props.onChange(draft);
+          setEditing(false);
+        }}
+      >
+        Set
+      </button>
+      <button className="linkish" onClick={() => setEditing(false)}>
+        cancel
+      </button>
+      {custom && <span className={bad ? "error" : "fineprint"}>{bad ?? describeCron(draft)}</span>}
+    </span>
+  );
+}
+
+/**
  * The judgment calls, on or off, after enrollment.
  *
  * They are on by default: the findings where the fix depends on what you meant
@@ -963,31 +1034,3 @@ function TierToggle(props: { on: boolean; onChange: (on: boolean) => void }) {
   );
 }
 
-function CadencePicker(props: { cron: string; onChange: (cron: string) => void }) {
-  const [custom, setCustom] = useState(props.cron);
-  const known = CRON_PRESETS.some((p) => p.cron === props.cron);
-  const [open, setOpen] = useState(false);
-  const bad = cronError(custom);
-  return (
-    <div className="cadence">
-      <span className="fineprint">Cadence</span>
-      <select value={known ? props.cron : "custom"} onChange={(e) => (e.target.value === "custom" ? setOpen(true) : props.onChange(e.target.value))}>
-        {CRON_PRESETS.map((p) => (
-          <option key={p.cron} value={p.cron}>
-            {p.label}
-          </option>
-        ))}
-        <option value="custom">Custom…</option>
-      </select>
-      {(open || !known) && (
-        <>
-          <input value={custom} onChange={(e) => setCustom(e.target.value)} aria-label="cron expression" className="cronin" />
-          <button disabled={!!bad || custom === props.cron} onClick={() => props.onChange(custom)}>
-            Set
-          </button>
-          <span className={bad ? "error" : "fineprint"}>{bad ?? describeCron(custom)}</span>
-        </>
-      )}
-    </div>
-  );
-}

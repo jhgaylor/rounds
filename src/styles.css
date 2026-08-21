@@ -341,8 +341,13 @@ a.buttonish:hover { background: var(--brand-hover); }
 .settings { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
 .tier { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-2); }
 .tier input { margin: 0; }
-.cadence { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; }
-.cadence .cronin { font-family: var(--mono); font-size: 12.5px; width: 140px; }
+/* A fact that is also its own control: it reads as the sentence it replaced
+   until you go near it. */
+.editable { font: inherit; color: inherit; background: none; border: none; padding: 0; border-bottom: 1px dotted var(--muted); border-radius: 0; }
+.editable:hover { color: var(--brand); border-bottom-color: var(--brand); }
+.cadence-edit { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.cadence-edit select { font-size: 12px; padding: 2px 6px; }
+.cadence-edit .cronin { font-family: var(--mono); font-size: 12px; width: 128px; padding: 2px 6px; }
 select { font: inherit; font-size: 13px; color: var(--text); background: var(--bg-1); border: 1px solid var(--border); border-radius: 7px; padding: 6px 8px; }
 
 /* ── enrolling ───────────────────────────────────────────────────────────── */
