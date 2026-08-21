@@ -1,3 +1,5 @@
+import { cronError } from "./cron";
+
 /** Where the app points and how it authenticates. Stored locally, in this browser only. */
 export interface Settings {
   baseUrl: string;
@@ -60,5 +62,33 @@ export function saveSkipped(slugs: string[]): void {
   } catch {
     // A browser with storage switched off still gets a working rail; the list
     // simply forgets between visits.
+  }
+}
+
+/**
+ * The cadence the rail enrolls with, remembered between visits.
+ *
+ * Somebody enrolling five repositories in a sitting wants them on the same
+ * schedule, and picking it once should be enough. It is a starting point
+ * rather than a setting: each repository's own page owns its cron after that.
+ */
+const CADENCE = "rounds.cadence";
+
+export function loadCadence(fallback: string): string {
+  try {
+    const raw = localStorage.getItem(CADENCE);
+    // Validated on the way out, not just in: a hand-edited or stale value
+    // would otherwise become a schedule Fountain rejects at enrollment.
+    return raw && !cronError(raw) ? raw : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+export function saveCadence(cron: string): void {
+  try {
+    if (!cronError(cron)) localStorage.setItem(CADENCE, cron);
+  } catch {
+    // Storage off: the picker still works, it just forgets between visits.
   }
 }

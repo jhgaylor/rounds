@@ -26,7 +26,16 @@ import {
 } from "./lib/ghoauth";
 import { completeLoginIfCallback, revoke } from "./lib/oauth";
 import { foldRounds, type RoundEntry } from "./lib/protocol";
-import { clearSettings, loadSettings, loadSkipped, saveSettings, saveSkipped, type Settings } from "./lib/settings";
+import {
+  clearSettings,
+  loadCadence,
+  loadSettings,
+  loadSkipped,
+  saveCadence,
+  saveSettings,
+  saveSkipped,
+  type Settings,
+} from "./lib/settings";
 import type { AccessibleRepo } from "./lib/repos";
 import {
   agentDescription,
@@ -105,6 +114,8 @@ export function App() {
   const [repos, setRepos] = useState<AccessibleRepo[]>([]);
   const [reposLoading, setReposLoading] = useState(false);
   const [skipped, setSkipped] = useState<string[]>(() => loadSkipped());
+  /** What the rail enrolls with. Picked once, remembered, per-repo after that. */
+  const [railCron, setRailCron] = useState<string>(() => loadCadence(DEFAULT_CRON));
 
   const client = useMemo(() => (settings ? new FountainClient(settings) : null), [settings]);
   const catalogRef = useRef<Catalog | null>(null);
@@ -740,7 +751,12 @@ export function App() {
             busy={adding}
             ready={ghAuth !== null && installed === true}
             loading={reposLoading}
-            onEnroll={(slug) => void enroll(slug, DEFAULT_CRON, DEFAULT_POLICY)}
+            cron={railCron}
+            onCron={(c) => {
+              setRailCron(c);
+              saveCadence(c);
+            }}
+            onEnroll={(slug, cron) => void enroll(slug, cron, DEFAULT_POLICY)}
             onSkip={skipRepo}
             onUnskip={unskipRepo}
           />

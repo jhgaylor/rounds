@@ -356,6 +356,8 @@ describe("RepoPicker", () => {
         busy={null}
         ready
         loading={false}
+        cron="0 9 * * 1"
+        onCron={() => {}}
         onEnroll={() => {}}
         onSkip={() => {}}
         onUnskip={() => {}}
@@ -388,8 +390,21 @@ describe("RepoPicker", () => {
     expect(html).toContain("skip");
   });
 
+  // Enrolling five repositories is five clicks; asking the same question five
+  // times would be a toll rather than a choice. So the cadence is one control
+  // for the list, and every row says what it will do.
+  test("the cadence is picked once, for the list", () => {
+    const html = render();
+    for (const preset of ["Weekly, Monday 09:00 UTC", "Daily, 09:00 UTC"]) expect(html).toContain(preset);
+    expect(html).toContain("cadence for new repositories");
+  });
+
   test("says what a one-click enroll commits to, since it does not ask", () => {
-    expect(render()).toContain("weekly cadence and both merge-worthy tiers");
+    expect(render().replace(/<!-- -->/g, "")).toContain("Enrolling runs it every monday at 09:00 utc");
+  });
+
+  test("a different cadence changes what the row promises", () => {
+    expect(render({ cron: "0 9 * * *" }).replace(/<!-- -->/g, "")).toContain("Enrolling runs it every day at 09:00 utc");
   });
 
   test("shows nothing at all until GitHub is signed in and the App is on", () => {

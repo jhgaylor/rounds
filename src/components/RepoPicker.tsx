@@ -12,8 +12,9 @@
  * "these are the ones you probably meant" is a claim rather than a layout.
  */
 import { useMemo, useState } from "react";
-import { relativeTime } from "../lib/cron";
+import { describeCron, relativeTime } from "../lib/cron";
 import { keyOfSlug, railRepos, type AccessibleRepo, type RepoFilter } from "../lib/repos";
+import { CRON_PRESETS } from "../lib/spec";
 
 export function RepoPicker(props: {
   repos: AccessibleRepo[];
@@ -24,7 +25,10 @@ export function RepoPicker(props: {
   /** Nothing can be enrolled until GitHub is signed in and the App is on. */
   ready: boolean;
   loading: boolean;
-  onEnroll: (slug: string) => void;
+  /** The cadence a click on Enroll uses — remembered between visits. */
+  cron: string;
+  onCron: (cron: string) => void;
+  onEnroll: (slug: string, cron: string) => void;
   onSkip: (slug: string) => void;
   onUnskip: (slug: string) => void;
 }) {
@@ -68,6 +72,20 @@ export function RepoPicker(props: {
           {chip("all", "All", totalAvailable)}
           {skippedCount > 0 && chip("skipped", "Skipped", skippedCount)}
         </div>
+        {/* One cadence for the list rather than one per row: enrolling five
+            repositories is five clicks, and answering the same question five
+            times is not a choice, it is a toll. Each repo's own page can
+            change it afterwards. */}
+        <label className="picker-cadence">
+          <span>Runs</span>
+          <select value={props.cron} onChange={(e) => props.onCron(e.target.value)} aria-label="cadence for new repositories">
+            {CRON_PRESETS.map((preset) => (
+              <option key={preset.cron} value={preset.cron}>
+                {preset.label}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
 
       <div className="picker-list">
@@ -92,7 +110,12 @@ export function RepoPicker(props: {
                   skip
                 </button>
               )}
-              <button className="primary tiny" onClick={() => props.onEnroll(r.slug)} disabled={props.busy !== null} type="button">
+              <button
+                className="primary tiny"
+                onClick={() => props.onEnroll(r.slug, props.cron)}
+                disabled={props.busy !== null}
+                type="button"
+              >
                 {props.busy === keyOfSlug(r.slug) ? "…" : "Enroll"}
               </button>
             </div>
@@ -116,7 +139,8 @@ export function RepoPicker(props: {
         </button>
       )}
       <p className="fineprint">
-        Enrolling takes the weekly cadence and both merge-worthy tiers. Both are yours to change afterwards.
+        Enrolling runs it {describeCron(props.cron).toLowerCase()} and proposes both merge-worthy tiers. Both are
+        yours to change afterwards.
       </p>
     </div>
   );
