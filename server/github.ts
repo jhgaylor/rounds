@@ -354,6 +354,88 @@ export async function openPull(
 }
 
 /** Where this person has the App installed. Drives the "install it" gate in the UI. */
+/**
+ * A repository this person could enroll: one the App is installed on and they
+ * can push to.
+ *
+ * `pushedAt` and the flags are here because the first question the UI has to
+ * answer is "which of my forty repositories did I mean" — a list sorted by
+ * nothing is as much work as typing the name was.
+ */
+export interface AccessibleRepo {
+  /** `owner/name`. */
+  slug: string;
+  private: boolean;
+  fork: boolean;
+  archived: boolean;
+  /** ISO 8601, or null when GitHub has no push on record. */
+  pushedAt: string | null;
+  description: string | null;
+}
+
+/** How many pages of 100 to walk per installation before calling it enough. */
+const REPO_PAGES = 5;
+
+/**
+ * Every repository the signed-in person can enroll, across every installation
+ * they can see.
+ *
+ * Asked with their own token against `/user/installations/{id}/repositories`,
+ * so the answer is the intersection GitHub itself computes: repositories the
+ * App was installed on *and* this person has access to. Nothing here is taken
+ * on trust — enrolling still proves push access and mints an installation
+ * token — but it means the common case is picking from a list rather than
+ * typing a slug and finding out it was the wrong one.
+ *
+ * Repositories they cannot push to are dropped, because a grant for one would
+ * be refused; archived ones are kept but flagged, since a round would audit
+ * one happily and never be able to open anything.
+ */
+export async function accessibleRepos(token: string, deps: Deps = {}): Promise<AccessibleRepo[]> {
+  const api = deps.api ?? API;
+  const installations = await userInstallations(token, deps);
+  const seen = new Set<string>();
+  const out: AccessibleRepo[] = [];
+  for (const installation of installations) {
+    for (let page = 1; page <= REPO_PAGES; page++) {
+      const body = await gh<{ repositories?: RawRepo[] }>(
+        `${api}/user/installations/${installation.id}/repositories?per_page=100&page=${page}`,
+        token,
+        {},
+        deps.fetchImpl,
+      );
+      const repositories = body.repositories ?? [];
+      for (const r of repositories) {
+        const slug = r.full_name ?? "";
+        // Push access is the same thing enrolling checks. Offering a
+        // repository the grant would refuse is worse than not offering it.
+        if (!slug || seen.has(slug) || r.permissions?.push !== true) continue;
+        seen.add(slug);
+        out.push({
+          slug,
+          private: r.private === true,
+          fork: r.fork === true,
+          archived: r.archived === true,
+          pushedAt: typeof r.pushed_at === "string" ? r.pushed_at : null,
+          description: typeof r.description === "string" ? r.description : null,
+        });
+      }
+      if (repositories.length < 100) break;
+    }
+  }
+  return out;
+}
+
+interface RawRepo {
+  full_name?: string;
+  private?: boolean;
+  fork?: boolean;
+  archived?: boolean;
+  pushed_at?: string | null;
+  description?: string | null;
+  permissions?: { push?: boolean };
+}
+
 export async function userInstallations(
   token: string,
   deps: Deps = {},

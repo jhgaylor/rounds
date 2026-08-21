@@ -13,6 +13,8 @@
  * the other leaves it alone.
  */
 
+import type { AccessibleRepo } from "./repos";
+
 const STASH = "rounds.github.oauth";
 
 export interface GhLogin {
@@ -140,6 +142,24 @@ export async function fetchInstallations(token: string): Promise<Installations> 
   const body = (await res.json().catch(() => ({}))) as Partial<Installations> & { error?: string };
   if (!res.ok) throw new Error(body.error ?? "Could not ask GitHub where the App is installed.");
   return { installed: body.installed === true, installations: body.installations ?? [] };
+}
+
+/**
+ * Which repositories this person could enroll.
+ *
+ * Answered from their own token against their own installations, so it adds no
+ * access — it only means the first enrollment is a choice from a list rather
+ * than a slug typed from memory.
+ */
+export async function fetchRepos(token: string): Promise<AccessibleRepo[]> {
+  const res = await fetch("/gh/repos", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ token }),
+  });
+  const body = (await res.json().catch(() => ({}))) as { repos?: AccessibleRepo[]; error?: string };
+  if (!res.ok) throw new Error(body.error ?? "Could not ask GitHub which repositories are available.");
+  return body.repos ?? [];
 }
 
 /** What this deployment's GitHub App is, or a not-configured answer. */

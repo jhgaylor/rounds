@@ -137,7 +137,12 @@ bun run dev        # http://localhost:5181
 ```
 
 Sign in with Fountain (or paste an API key), sign in with GitHub, install the
-App, then enroll a repo and pick a cadence. Server-side requirements, same as any
+App, then enroll a repo and pick a cadence. Signing in with GitHub already
+says which repositories the App can reach, so the rail lists them under the
+enrolled ones — recently-pushed first, with a search, and a **skip** that
+keeps one out of the way. Enrolling from there takes the weekly cadence and
+the mechanical tier, both editable afterwards; the box below still takes an
+`owner/name` typed by hand. Server-side requirements, same as any
 external Fountain client:
 
 ```
@@ -193,6 +198,7 @@ guarantee — same image, same origin, no CORS, nothing extra to deploy:
 GET  /gh/app            what the App is, so the UI can offer to install it
 GET  /gh/callback       finishes "Sign in with GitHub"
 POST /gh/installations  where you have the App installed — the gate on enrolling
+POST /gh/repos          which repositories you could enroll, so the rail can offer them
 POST /gh/grant          mints a grant, after checking you can push there
 POST /gh/token          trades a grant for a one-hour, one-repo, READ-ONLY token
 POST /gh/state          what a round needs before it decides: HEAD, policy, its own past PRs

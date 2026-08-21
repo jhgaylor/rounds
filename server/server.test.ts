@@ -29,6 +29,8 @@ interface FakeOpts {
   pulls?: FakePull[];
   /** The repo's own `.rounds.yml`, or null when it has none. */
   policyFile?: string | null;
+  /** What `/user/installations/{id}/repositories` answers, in order. */
+  accessible?: Array<{ full_name: string; push?: boolean; private?: boolean; fork?: boolean; archived?: boolean; pushed_at?: string | null }>;
   defaultBranch?: string;
 }
 function fakeGitHub(opts: FakeOpts = {}) {
@@ -63,6 +65,19 @@ function fakeGitHub(opts: FakeOpts = {}) {
     if (path === "/user") return Response.json({ login: "octocat" });
     if (path === "/user/installations") {
       return Response.json({ installations: [...installed].map((slug, i) => ({ id: 99 + i, account: { login: slug.split("/")[0] }, repository_selection: "selected" })) });
+    }
+    if (/^\/user\/installations\/\d+\/repositories$/.test(path)) {
+      const page = Number(new URL(url).searchParams.get("page") ?? "1");
+      const all = (opts.accessible ?? []).map((r) => ({
+        full_name: r.full_name,
+        private: r.private ?? false,
+        fork: r.fork ?? false,
+        archived: r.archived ?? false,
+        pushed_at: r.pushed_at ?? "2026-08-01T00:00:00Z",
+        description: null,
+        permissions: { push: r.push !== false },
+      }));
+      return Response.json({ total_count: all.length, repositories: page === 1 ? all : [] });
     }
     if (path === "/app/installations/99/access_tokens") {
       const b = body() as { repositories?: string[]; permissions?: Record<string, string> };
@@ -260,6 +275,42 @@ describe("GET /gh/callback", () => {
 
   test("a missing code is a 400", async () => {
     expect((await call(routesWith(fakeGitHub()), "/gh/callback")).status).toBe(400);
+  });
+});
+
+describe("POST /gh/repos", () => {
+  test("answers with what this person could enroll, so the UI can offer it", async () => {
+    const fake = fakeGitHub({
+      accessible: [
+        { full_name: "o/web", private: true, pushed_at: "2026-08-19T00:00:00Z" },
+        { full_name: "o/archived", archived: true },
+      ],
+    });
+    const res = await postJson(routesWith(fake), "/gh/repos", { token: "gho_usertoken" });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.repos).toEqual([
+      { slug: "o/web", private: true, fork: false, archived: false, pushedAt: "2026-08-19T00:00:00Z", description: null },
+      { slug: "o/archived", private: false, fork: false, archived: true, pushedAt: "2026-08-01T00:00:00Z", description: null },
+    ]);
+  });
+
+  test("leaves out anything they cannot push to — a grant for one would be refused anyway", async () => {
+    const fake = fakeGitHub({ accessible: [{ full_name: "o/theirs", push: false }, { full_name: "o/mine" }] });
+    const body = await (await postJson(routesWith(fake), "/gh/repos", { token: "gho_usertoken" })).json();
+    expect(body.repos.map((r: { slug: string }) => r.slug)).toEqual(["o/mine"]);
+  });
+
+  test("is asked with the person's own token, never the App's", async () => {
+    const fake = fakeGitHub({ accessible: [{ full_name: "o/mine" }] });
+    await postJson(routesWith(fake), "/gh/repos", { token: "gho_usertoken" });
+    // Listing what somebody can see mints nothing: it is their access, asked
+    // with their credential.
+    expect(fake.minted).toEqual([]);
+  });
+
+  test("without a token it is a bad request, not an empty list", async () => {
+    expect((await postJson(routesWith(fakeGitHub()), "/gh/repos", {})).status).toBe(400);
   });
 });
 

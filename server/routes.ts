@@ -4,6 +4,7 @@
  *   GET  /gh/app                     what the App is, so the UI can offer to install it
  *   GET  /gh/callback?code&state     finish "Sign in with GitHub"; hands back a user token
  *   POST /gh/installations {token}   where this person has the App installed
+ *   POST /gh/repos   {token}         which repositories they could enroll
  *   POST /gh/grant   {token, repo}   mint a durable grant for an unattended agent
  *   POST /gh/token   {grant}         trade a grant for a one-hour, READ-ONLY token
  *   POST /gh/state   {grant}         what a round needs to know before it decides
@@ -22,7 +23,7 @@
  * policy and its own history first. See `propose.ts` for why a prompt is the
  * wrong place to keep a rule.
  */
-import { canPush, exchangeCode, GitHubError, installationToken, userInstallations, viewer, type Deps } from "./github";
+import { accessibleRepos, canPush, exchangeCode, GitHubError, installationToken, userInstallations, viewer, type Deps } from "./github";
 import { issueGrant, readGrant, type Grant } from "./grant";
 import { propose, readProposal, Refused, roundState } from "./propose";
 import type { Config } from "./config";
@@ -114,6 +115,16 @@ export function buildRoutes(config: Config, deps: Deps = {}): Routes {
         if (typeof body.token !== "string") return json(req, { error: "Send {token}." }, 400);
         const installations = await userInstallations(body.token, deps);
         return json(req, { installed: installations.length > 0, installations });
+      }
+
+      if (url.pathname === "/gh/repos" && req.method === "POST") {
+        // Sign-in already told us what the App can reach, so making somebody
+        // type `owner/name` from memory is a question we can answer for them.
+        // Their own token, their own access — this adds no reach, it just
+        // stops the first enrollment being a guess.
+        const body = await readBody(req);
+        if (typeof body.token !== "string") return json(req, { error: "Send {token}." }, 400);
+        return json(req, { repos: await accessibleRepos(body.token, deps) });
       }
 
       if (url.pathname === "/gh/grant" && req.method === "POST") {

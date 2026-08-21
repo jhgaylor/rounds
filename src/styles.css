@@ -100,6 +100,30 @@ a code { color: inherit; }
 .addrepo { display: flex; gap: 6px; }
 .addrepo input { flex: 1; min-width: 0; font-family: var(--mono); font-size: 12.5px; }
 .addrepo.big input { font-size: 14px; padding: 10px 12px; }
+/* The rail's two halves: what is enrolled, and what is merely available. */
+.railhead { font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); padding: 0 8px; }
+.picker { display: flex; flex-direction: column; gap: 7px; border-top: 1px solid var(--border); margin-top: 10px; padding-top: 10px; min-height: 0; }
+.picker-head { display: flex; flex-direction: column; gap: 6px; }
+.picker-search { font-size: 12.5px; padding: 5px 8px; width: 100%; }
+.chips { display: flex; gap: 4px; flex-wrap: wrap; }
+.chip { font-size: 11px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--border); background: none; color: var(--text-2); display: inline-flex; gap: 5px; align-items: center; }
+.chip.on { border-color: var(--brand); background: var(--brand-soft); color: var(--brand); }
+.chip i { font-style: normal; font-size: 10px; color: var(--muted); }
+.chip.on i { color: var(--brand); }
+.picker-list { display: flex; flex-direction: column; gap: 2px; }
+.pickrow { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 5px 8px; border-radius: 7px; }
+.pickrow:hover { background: var(--bg-2); }
+.pickrow.archived { opacity: 0.65; }
+.pickmain { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.pickmain code { background: none; padding: 0; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pickmeta { font-size: 10.5px; color: var(--muted); display: flex; gap: 5px; align-items: center; }
+.tag { font-style: normal; border: 1px solid var(--border); border-radius: 999px; padding: 0 5px; }
+.tag.warnTag { border-color: var(--warn); color: var(--warn); }
+.pickacts { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+.pickacts .linkish { font-size: 11px; opacity: 0; }
+.pickrow:hover .pickacts .linkish, .pickacts .linkish:focus-visible { opacity: 1; }
+button.tiny { font-size: 11px; padding: 3px 9px; }
+
 .rail-foot { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; border-top: 1px solid var(--border); padding-top: 10px; }
 .rail-foot .fineprint { width: 100%; }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex-shrink: 0; }

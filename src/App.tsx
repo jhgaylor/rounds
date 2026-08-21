@@ -19,13 +19,15 @@ import {
   completeGithubLoginIfCallback,
   fetchAppInfo,
   fetchInstallations,
+  fetchRepos,
   isGithubCallback,
   takeInstallCallback,
   type AppInfo,
 } from "./lib/ghoauth";
 import { completeLoginIfCallback, revoke } from "./lib/oauth";
 import { foldRounds, type RoundEntry } from "./lib/protocol";
-import { clearSettings, loadSettings, saveSettings, type Settings } from "./lib/settings";
+import { clearSettings, loadSettings, loadSkipped, saveSettings, saveSkipped, type Settings } from "./lib/settings";
+import type { AccessibleRepo } from "./lib/repos";
 import {
   agentDescription,
   agentName,
@@ -46,6 +48,7 @@ import {
   type RoundsPolicy,
 } from "./lib/spec";
 import { InstallGate } from "./components/InstallGate";
+import { RepoPicker } from "./components/RepoPicker";
 import { Landing } from "./components/Landing";
 import { RoundView } from "./components/RoundView";
 
@@ -82,6 +85,11 @@ export function App() {
   const [checkingInstall, setCheckingInstall] = useState(false);
   const [ghAuth, setGhAuth] = useState<GhAuth | null>(() => loadGhAuth());
   const [appInfo, setAppInfo] = useState<AppInfo | null>(null);
+  // What the App can already reach. Signing in tells us, so enrolling should
+  // be picking from a list rather than typing a slug from memory.
+  const [repos, setRepos] = useState<AccessibleRepo[]>([]);
+  const [reposLoading, setReposLoading] = useState(false);
+  const [skipped, setSkipped] = useState<string[]>(() => loadSkipped());
 
   const client = useMemo(() => (settings ? new FountainClient(settings) : null), [settings]);
   const catalogRef = useRef<Catalog | null>(null);
@@ -209,6 +217,52 @@ export function App() {
     void checkInstall();
   }, [checkInstall]);
 
+  /**
+   * The repositories the App can reach, once we know it is installed at all.
+   *
+   * Re-asked whenever the install answer changes, which is what coming back
+   * from "add repositories" looks like from in here.
+   */
+  useEffect(() => {
+    if (!ghAuth || installed !== true) {
+      setRepos([]);
+      return;
+    }
+    let live = true;
+    setReposLoading(true);
+    void fetchRepos(ghAuth.token)
+      .then((list) => {
+        if (live) setRepos(list);
+      })
+      .catch(() => {
+        // Not worth a toast: the rail falls back to the box you type into,
+        // and the install gate already says when the token is the problem.
+        if (live) setRepos([]);
+      })
+      .finally(() => {
+        if (live) setReposLoading(false);
+      });
+    return () => {
+      live = false;
+    };
+  }, [ghAuth, installed]);
+
+  const skipRepo = useCallback((slug: string) => {
+    setSkipped((prev) => {
+      const next = prev.includes(slug) ? prev : [...prev, slug];
+      saveSkipped(next);
+      return next;
+    });
+  }, []);
+
+  const unskipRepo = useCallback((slug: string) => {
+    setSkipped((prev) => {
+      const next = prev.filter((s) => s !== slug);
+      saveSkipped(next);
+      return next;
+    });
+  }, []);
+
   const enrolled: Enrolled[] = useMemo(() => {
     const byAgent = new Map(schedules.map((s) => [s.agent_id, s]));
     const out: Enrolled[] = [];
@@ -218,6 +272,10 @@ export function App() {
     }
     return out.sort((a, b) => a.key.localeCompare(b.key));
   }, [team, schedules]);
+
+  /** What the picker below the rail must not offer again. */
+  const enrolledKeys = useMemo(() => new Set(enrolled.map((e) => e.key)), [enrolled]);
+  const skippedSet = useMemo(() => new Set(skipped), [skipped]);
 
   /**
    * Bring an already-enrolled agent's prompt up to date.
@@ -597,6 +655,7 @@ export function App() {
           Rounds<span>.</span>
         </div>
         <nav className="repolist">
+          {enrolled.length > 0 && <span className="railhead">Enrolled</span>}
           {enrolled.map((e) => (
             <button key={e.key} className={e.key === selected ? "repobtn active" : "repobtn"} onClick={() => setSelected(e.key)}>
               <code>{refLabel(e.ref)}</code>
@@ -613,6 +672,20 @@ export function App() {
             </div>
           )}
           {team !== null && enrolled.length === 0 && !pending && <p className="fineprint">Nothing enrolled yet.</p>}
+
+          {/* The other half of the rail: what the App can reach and nobody has
+              decided about yet. Enroll it, or wave it away. */}
+          <RepoPicker
+            repos={repos}
+            enrolledKeys={enrolledKeys}
+            skipped={skippedSet}
+            busy={adding}
+            ready={ghAuth !== null && installed === true}
+            loading={reposLoading}
+            onEnroll={(slug) => void enroll(slug, DEFAULT_CRON, DEFAULT_POLICY)}
+            onSkip={skipRepo}
+            onUnskip={unskipRepo}
+          />
         </nav>
         <div className="rail-foot">
           <span className={connected ? "dot on" : "dot"} title={connected ? "live" : "reconnecting"} />

@@ -4,6 +4,8 @@ import { foldRounds } from "../lib/protocol";
 import { RoundView } from "./RoundView";
 import { InstallGate } from "./InstallGate";
 import { FAMILIES, Landing, TIERS, TOTAL } from "./Landing";
+import { RepoPicker } from "./RepoPicker";
+import { keyOfSlug, type AccessibleRepo } from "../lib/repos";
 
 const REPO = { host: "github.com", owner: "o", name: "r" } as const;
 
@@ -292,5 +294,68 @@ describe("Landing", () => {
   test("the sign-in card still works from here", () => {
     expect(html).toContain("Sign in with Fountain");
     expect(html).toContain("paste an API key instead");
+  });
+});
+
+// Enrolling used to be a box you typed `owner/name` into. The rail now offers
+// what the App can already reach, so these are about what it offers unasked.
+describe("RepoPicker", () => {
+  const repo = (slug: string, over: Partial<AccessibleRepo> = {}): AccessibleRepo => ({
+    slug,
+    private: false,
+    fork: false,
+    archived: false,
+    pushedAt: new Date(Date.now() - 86400_000).toISOString(),
+    description: null,
+    ...over,
+  });
+
+  const render = (over: Partial<Parameters<typeof RepoPicker>[0]> = {}) =>
+    renderToString(
+      <RepoPicker
+        repos={[repo("o/web"), repo("o/api"), repo("o/ancient", { archived: true, pushedAt: "2019-01-01T00:00:00Z" })]}
+        enrolledKeys={new Set()}
+        skipped={new Set()}
+        busy={null}
+        ready
+        loading={false}
+        onEnroll={() => {}}
+        onSkip={() => {}}
+        onUnskip={() => {}}
+        {...over}
+      />,
+    );
+
+  test("offers the active repositories without being asked, with a way to search", () => {
+    const html = render();
+    expect(html).toContain("o/web");
+    expect(html).toContain("o/api");
+    expect(html).toContain("Search repositories");
+  });
+
+  test("holds back the quiet ones rather than burying the list, and says how many", () => {
+    const html = render().replace(/<!-- -->/g, "");
+    expect(html).not.toContain("o/ancient");
+    expect(html).toContain("1 more, quiet or archived");
+  });
+
+  test("never offers something already enrolled", () => {
+    const html = render({ enrolledKeys: new Set([keyOfSlug("o/web")]) });
+    expect(html).not.toContain("o/web");
+    expect(html).toContain("o/api");
+  });
+
+  test("every row can be enrolled or waved away — that is the whole interaction", () => {
+    const html = render();
+    expect(html).toContain("Enroll");
+    expect(html).toContain("skip");
+  });
+
+  test("says what a one-click enroll commits to, since it does not ask", () => {
+    expect(render()).toContain("weekly cadence and the mechanical fixes only");
+  });
+
+  test("shows nothing at all until GitHub is signed in and the App is on", () => {
+    expect(render({ ready: false })).toBe("");
   });
 });
