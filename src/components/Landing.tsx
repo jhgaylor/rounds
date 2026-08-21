@@ -3,9 +3,13 @@
  *
  * Everything claimed here is checkable against the thing that does the work —
  * the rule counts come from chant's audit rules reference, and the tier split
- * is the one the agent actually runs under. A landing page that oversells an
- * unattended bot is worse than one that undersells it: the whole product is
+ * is the one a round actually runs under. A landing page that oversells an
+ * unattended tool is worse than one that undersells it: the whole product is
  * somebody deciding to trust it with commit access while they are not looking.
+ *
+ * It sells the outcome — pull requests you can merge — rather than the
+ * machinery that produces them. Nobody buying Dependabot is told what it is
+ * made of, and the word for what runs here is "Rounds".
  *
  * The sign-in card is the last thing on the page, not the first, because there
  * is nothing to sign into until you know what it does.
@@ -113,7 +117,7 @@ export function Landing(props: { error: string | null; onPaste: (s: Settings) =>
             <p>
               chant knows the exact edit and produces the diff itself — pin an action to a commit SHA, pin an image to
               a digest, replace <code>write-all</code> with a least-privilege block. There is no judgment involved,
-              so the agent applies the diff it was handed and nothing else.
+              so Rounds applies the diff it was handed and nothing else.
             </p>
             <pre className="lp-diff">
               <code>
@@ -139,7 +143,7 @@ export function Landing(props: { error: string | null; onPaste: (s: Settings) =>
             <p>
               Worth a pull request, but the fix depends on what you meant — a container that may run as root, a{" "}
               <code>pull_request_target</code> that checks out untrusted code, a Cloud SQL instance open to the world.
-              Tick <i>also propose the judgment calls</i> when you enroll and the agent makes the change itself, then
+              Tick <i>also propose the judgment calls</i> when you enroll and Rounds makes the change itself, then
               re-runs the audit to prove the finding is gone and nothing new appeared. If it cannot verify it, it
               abandons the change and tells you why rather than opening it.
             </p>
@@ -190,14 +194,14 @@ export function Landing(props: { error: string | null; onPaste: (s: Settings) =>
       </section>
 
       <section className="lp-section" id="trust">
-        <h2>The agent cannot write to your repository</h2>
+        <h2>Nothing that reads your repository can write to it</h2>
         <p className="lp-sub">
-          An agent that reads configuration files out of a repository is reading input somebody else may control. So
-          it is not given anything it could be talked into misusing.
+          Configuration files are input, and input in a repository is something somebody else may have written. So the
+          half of Rounds that reads them holds nothing that could be talked into misusing.
         </p>
         <div className="lp-split">
           <div className="lp-card">
-            <h3>What the agent holds</h3>
+            <h3>What the audit holds</h3>
             <p>
               A signed note saying you authorized work on one repository. It is not a GitHub credential — on its own
               it opens nothing. Each round it buys a token that <b>can only read</b>, lasts an hour, and reaches
@@ -207,14 +211,14 @@ export function Landing(props: { error: string | null; onPaste: (s: Settings) =>
           <div className="lp-card">
             <h3>What actually writes</h3>
             <p>
-              This service. The agent sends its verified fix here and the commit, the branch and the pull request are
-              made server-side, with a credential the agent never sees and that exists for the length of one request.
+              This service, and only once the fix has been verified. The commit, the branch and the pull request are
+              made here, with a credential that never leaves this process and exists for the length of one request.
             </p>
           </div>
         </div>
         <p className="lp-sub">
-          Which means the rules above are not promises in a prompt. The branch name is derived, not supplied; a
-          cluster you declined is refused here; the cap is counted here. An agent that decided to misbehave would be
+          Which means the rules above are not good intentions. The branch name is derived, not supplied; a cluster
+          you declined is refused here; the cap is counted here. A round that tried to go outside them would be
           asking this service to do it, and would be turned down.
         </p>
         <p className="fineprint">
@@ -227,7 +231,7 @@ export function Landing(props: { error: string | null; onPaste: (s: Settings) =>
         <h2>The repository sets its own terms</h2>
         <p className="lp-sub">
           Drop a <code>.rounds.yml</code> in the root and it overrides everything above. It is read and enforced by
-          the service, not merely suggested to the agent.
+          the service, not honored on the way past.
         </p>
         <pre className="lp-code">
           <code>{`enabled: true              # false → the round does nothing at all
@@ -242,9 +246,9 @@ max_open_prs: 3`}</code>
         <div className="lp-ctacopy">
           <h2>Turn it on and forget it</h2>
           <p>
-            Rounds runs on your own <a href="https://github.com/BinaryBourbon/fountain">Fountain</a> — one agent and
-            one schedule per repository. Sign in, install the GitHub App on the repositories you want audited, pick a
-            cadence.
+            Rounds runs on your own <a href="https://github.com/BinaryBourbon/fountain">Fountain</a> — one schedule
+            per repository, on a computer of your own. Sign in, install the GitHub App on the repositories you want
+            audited, pick a cadence.
           </p>
           <p className="fineprint">
             The interactive version is <a href="https://github.com/jhgaylor/mend">Mend</a>: point it at a repo, watch

@@ -44,8 +44,8 @@ export function InstallGate(props: {
       <div className="tokenrow warn">
         <span className="dot warnDot" />
         <span className="fineprint">
-          Sign in with GitHub to enroll a repository. Rounds never stores a GitHub token: each repository's agent carries
-          a signed authorization instead, trades it for a read-only token each round, and the pull requests are opened
+          Sign in with GitHub to enroll a repository. Rounds never stores a GitHub token: each repository holds a
+          signed authorization instead, trades it for a read-only token each round, and the pull requests are opened
           by this server.
         </span>
         <button className="primary" onClick={props.onSignIn}>
@@ -93,7 +93,7 @@ export function InstallGate(props: {
       <span className="dot on" />
       <span className="fineprint">
         Signed in as <b>{props.auth.login}</b>, with the App installed. A repository you enroll gets its own signed
-        authorization — no GitHub token is stored, and the agent that audits it cannot write anywhere.{" "}
+        authorization — no GitHub token is stored, and what audits it cannot write anywhere.{" "}
         <a href={props.appInfo.installUrl ?? "#"} target="_blank" rel="noreferrer">
           add or remove repositories
         </a>

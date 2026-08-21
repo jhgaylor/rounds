@@ -229,7 +229,7 @@ describe("InstallGate", () => {
     expect(html).toContain("I&#x27;ve installed it");
   });
 
-  test("ready: says what the agent can and cannot do", () => {
+  test("ready: says what an enrolled repository can and cannot do", () => {
     const html = render({ auth: AUTH, installed: true });
     expect(html).toContain("octocat");
     expect(html).toContain("cannot write anywhere");
@@ -278,9 +278,15 @@ describe("Landing", () => {
     expect(html.indexOf("Nothing watches your configuration")).toBeLessThan(html.indexOf("Sign in with Fountain"));
   });
 
-  test("it says the agent cannot write, which is the whole trust argument", () => {
-    expect(html).toContain("cannot write to your repository");
+  test("it says what reads your code cannot write, which is the whole trust argument", () => {
+    expect(html).toContain("Nothing that reads your repository can write to it");
     expect(html).toContain("can only read");
+  });
+
+  // It is a page for buying an outcome, not a tour of the machinery. Naming
+  // the parts is what the README is for.
+  test("it never says `agent`", () => {
+    expect(html.toLowerCase()).not.toContain("agent");
   });
 
   test("the sign-in card still works from here", () => {
