@@ -27,6 +27,7 @@ import {
   openPull,
   putBranch,
   readFile,
+  READ_STATE,
   repoInfo,
   WRITE,
   type AppConfig,
@@ -257,10 +258,12 @@ export interface RoundState {
  * what the repository's policy says, and what it has already proposed here.
  *
  * Read with a read-only token, deliberately — nothing on this path needs more,
- * and the agent calls it far more often than it proposes.
+ * and the agent calls it far more often than it proposes. Read, but not the
+ * same read the agent gets: listing pull requests needs `pull_requests: read`
+ * on top of what a clone takes, and this token stays here.
  */
 export async function roundState(app: AppConfig, repo: string, deps: Deps = {}): Promise<RoundState> {
-  const { token } = await installationToken(app, repo, deps);
+  const { token } = await installationToken(app, repo, deps, READ_STATE);
   const [info, pulls] = await Promise.all([repoInfo(token, repo, deps), listPullsWithPrefix(token, repo, BRANCH_PREFIX, deps)]);
   const [head, policyFile] = await Promise.all([
     readRef(token, repo, info.defaultBranch, deps),

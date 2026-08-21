@@ -421,10 +421,13 @@ describe("POST /gh/state", () => {
     expect(state.capacity).toBe(5);
   });
 
-  test("reads it with a read-only token", async () => {
+  test("reads it with a read-only token — one that may also list pull requests", async () => {
     const fake = fakeGitHub();
     await postJson(routesWith(fake), "/gh/state", { grant: grantFor() });
-    expect(fake.minted).toEqual([{ contents: "read", metadata: "read" }]);
+    // Without pull_requests a private repository answers "Resource not
+    // accessible by integration" instead of a list, and the round stops
+    // before it clones. It is not in what /gh/token hands the agent.
+    expect(fake.minted).toEqual([{ contents: "read", metadata: "read", pull_requests: "read" }]);
   });
 });
 
@@ -446,7 +449,7 @@ describe("POST /gh/propose", () => {
     const fake = fakeGitHub();
     const res = await postJson(routesWith(fake), "/gh/propose", proposal());
     expect(fake.minted).toEqual([
-      { contents: "read", metadata: "read" },
+      { contents: "read", metadata: "read", pull_requests: "read" },
       { contents: "write", pull_requests: "write", workflows: "write" },
     ]);
     expect(JSON.stringify(await res.json())).not.toContain("ghs_");
@@ -455,7 +458,7 @@ describe("POST /gh/propose", () => {
   test("a refused proposal never mints a token that can write", async () => {
     const fake = fakeGitHub({ pulls: [{ number: 41, state: "open", merged_at: null, head: "rounds/github-workflows-ci-yml" }] });
     await postJson(routesWith(fake), "/gh/propose", proposal());
-    expect(fake.minted).toEqual([{ contents: "read", metadata: "read" }]);
+    expect(fake.minted).toEqual([{ contents: "read", metadata: "read", pull_requests: "read" }]);
   });
 
   test("the branch is derived from the cluster key — a branch in the request is ignored", async () => {

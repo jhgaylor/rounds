@@ -196,6 +196,8 @@ POST /gh/installations  where you have the App installed — the gate on enrolli
 POST /gh/grant          mints a grant, after checking you can push there
 POST /gh/token          trades a grant for a one-hour, one-repo, READ-ONLY token
 POST /gh/state          what a round needs before it decides: HEAD, policy, its own past PRs
+                        (read with its own token — listing pull requests takes more than a clone
+                        does, and that token stays here)
 POST /gh/propose        the only path that writes — takes findings, renders the body
 ```
 

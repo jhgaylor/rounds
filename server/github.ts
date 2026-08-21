@@ -137,6 +137,21 @@ export async function canPush(token: string, slug: string, deps: Deps = {}): Pro
 export const READ_ONLY: Record<string, string> = { contents: "read", metadata: "read" };
 
 /**
+ * What reading a repository's state takes, which is more than cloning does.
+ *
+ * `.rounds.yml` is `contents`, but the round's own past pull requests are
+ * `pull_requests` — and on a private repository GitHub answers a token
+ * without it "Resource not accessible by integration" rather than an empty
+ * list, which stops the round before it clones anything.
+ *
+ * It is deliberately not folded into `READ_ONLY`: that one is handed to the
+ * agent, and the agent has no business reading pull requests directly. It
+ * asks `/gh/state` and gets one parsed answer. This set never leaves the
+ * server.
+ */
+export const READ_STATE: Record<string, string> = { contents: "read", metadata: "read", pull_requests: "read" };
+
+/**
  * What opening a pull request takes. Never leaves this process — see
  * `propose.ts`, which mints one, uses it, and lets it go.
  *
