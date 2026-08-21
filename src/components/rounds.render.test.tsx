@@ -304,6 +304,14 @@ describe("Landing", () => {
     expect(html.toLowerCase()).not.toContain("agent");
   });
 
+  // The pitch is that Rounds will not waste your attention. A page that spends
+  // a thousand words asking for it undercuts that before anyone signs in, so
+  // the length is a claim like the numbers are.
+  test("stays short", () => {
+    const words = html.replace(/<!-- -->/g, "").replace(/<[^>]+>/g, " ").split(/\s+/).filter(Boolean).length;
+    expect(words).toBeLessThan(700);
+  });
+
   test("the sign-in card still works from here", () => {
     expect(html).toContain("Sign in with Fountain");
     expect(html).toContain("paste an API key instead");

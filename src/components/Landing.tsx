@@ -11,6 +11,11 @@
  * machinery that produces them. Nobody buying Dependabot is told what it is
  * made of, and the word for what runs here is "Rounds".
  *
+ * It is also half the length it used to be. Every claim survived the cut; what
+ * went was the second and third sentence making each one again. A page about
+ * a tool whose whole pitch is "it will not waste your attention" cannot spend
+ * eight hundred words asking for it.
+ *
  * The sign-in card is the last thing on the page, not the first, because there
  * is nothing to sign into until you know what it does.
  */
@@ -18,16 +23,16 @@ import { Connect } from "./Connect";
 import type { Settings } from "../lib/settings";
 
 /** What chant audits, and how much of it. Counts from the audit rules reference. */
-export const FAMILIES: Array<{ name: string; where: string; rules: number; eg: string }> = [
-  { name: "GitHub Actions", where: ".github/workflows/*.yml", rules: 45, eg: "unpinned actions, missing permissions blocks, pull_request_target checking out untrusted code" },
-  { name: "AWS CloudFormation", where: "*.template, *.yaml, *.json", rules: 50, eg: "public S3 buckets, open security groups, IAM wildcards, unencrypted storage" },
-  { name: "GitLab CI", where: ".gitlab-ci.yml", rules: 39, eg: "undefined stages, rules that can never fire, invalid needs targets" },
-  { name: "Kubernetes", where: "manifests, Argo, Flux", rules: 31, eg: "privileged containers, host namespaces, hardcoded secrets in env vars, unpinned images" },
-  { name: "GCP Config Connector", where: "cnrm.cloud.google.com", rules: 26, eg: "public IAM members, Cloud SQL open to 0.0.0.0/0, missing encryption" },
-  { name: "Azure ARM", where: "deployment templates", rules: 24, eg: "public blob access, missing TDE, HTTPS-only off, TLS below 1.2" },
-  { name: "Helm", where: "any chart directory", rules: 21, eg: "root containers, :latest images, Secrets inlined into templates" },
-  { name: "Docker", where: "Dockerfile, compose", rules: 6, eg: "no USER instruction, :latest base images, SSH exposed on 22" },
-  { name: "Forgejo", where: ".forgejo/workflows", rules: 2, eg: "unresolvable action references, runner labels with no equivalent" },
+export const FAMILIES: Array<{ name: string; where: string; rules: number }> = [
+  { name: "GitHub Actions", where: ".github/workflows/*.yml", rules: 45 },
+  { name: "AWS CloudFormation", where: "*.template, *.yaml, *.json", rules: 50 },
+  { name: "GitLab CI", where: ".gitlab-ci.yml", rules: 39 },
+  { name: "Kubernetes", where: "manifests, Argo, Flux", rules: 31 },
+  { name: "GCP Config Connector", where: "cnrm.cloud.google.com", rules: 26 },
+  { name: "Azure ARM", where: "deployment templates", rules: 24 },
+  { name: "Helm", where: "any chart directory", rules: 21 },
+  { name: "Docker", where: "Dockerfile, compose", rules: 6 },
+  { name: "Forgejo", where: ".forgejo/workflows", rules: 2 },
 ];
 
 export const TOTAL = FAMILIES.reduce((n, f) => n + f.rules, 0);
@@ -63,11 +68,9 @@ export function Landing(props: { error: string | null; onPaste: (s: Settings) =>
           <b>Nothing watches your configuration.</b>
         </h1>
         <p className="lp-lede">
-          Your CI workflows, Kubernetes manifests, Dockerfiles, Helm charts and cloud templates drift the same way
-          dependencies do — a workflow pinned to a tag, a container still running as root, a bucket that quietly went
-          public. Nobody gets a pull request about it. Rounds enrolls a repository, audits it on a schedule with{" "}
-          <a href="https://intentius.io/chant/cli/audit/">chant</a>, fixes what it can prove it fixed, and opens the
-          pull request.
+          Workflows, manifests, Dockerfiles, Helm charts and cloud templates drift the way dependencies do, and nobody
+          gets a pull request about it. Rounds audits them on a schedule with{" "}
+          <a href="https://intentius.io/chant/cli/audit/">chant</a>, fixes what it can prove it fixed, and opens one.
         </p>
         <div className="lp-herostats">
           <Stat n={String(TOTAL)} label="rules" />
@@ -76,17 +79,16 @@ export function Landing(props: { error: string | null; onPaste: (s: Settings) =>
           <Stat n="0" label="dashboards to check" />
         </div>
         <p className="fineprint">
-          It runs whether or not this page is open. You meet the work on GitHub, in the review flow you already have.
+          It runs whether or not this page is open. You meet the work on GitHub.
         </p>
       </section>
 
       <section className="lp-section" id="what">
         <h2>What it watches</h2>
         <p className="lp-sub">
-          One audit, every config file in the repository. {TOTAL} rules, each one citing its source — OSSF Scorecard,
-          GitHub's own hardening guides, the cloud providers' security baselines.
+          {TOTAL} rules, each citing its source — OSSF Scorecard, GitHub's hardening guides, cloud provider baselines.
         </p>
-        <div className="lp-grid">
+        <div className="lp-grid tight">
           {FAMILIES.map((f) => (
             <div className="lp-card" key={f.name}>
               <div className="lp-cardhead">
@@ -94,18 +96,18 @@ export function Landing(props: { error: string | null; onPaste: (s: Settings) =>
                 <span className="lp-count">{f.rules}</span>
               </div>
               <code className="lp-where">{f.where}</code>
-              <p>{f.eg}</p>
             </div>
           ))}
         </div>
+        <p className="fineprint">
+          Unpinned actions, missing <code>permissions:</code> blocks, public buckets, root containers, secrets inlined
+          into Helm templates.
+        </p>
       </section>
 
       <section className="lp-section" id="tiers">
         <h2>What it will actually open a pull request for</h2>
-        <p className="lp-sub">
-          This is the part most tools are vague about, so here it is plainly. chant sorts every finding into three
-          tiers, and Rounds treats them differently on purpose.
-        </p>
+        <p className="lp-sub">chant sorts every finding into three tiers, and Rounds treats them differently on purpose.</p>
 
         <div className="lp-tiers">
           <div className="lp-tier on">
@@ -115,9 +117,8 @@ export function Landing(props: { error: string | null; onPaste: (s: Settings) =>
             </div>
             <h3>Mechanical</h3>
             <p>
-              chant knows the exact edit and produces the diff itself — pin an action to a commit SHA, pin an image to
-              a digest, replace <code>write-all</code> with a least-privilege block. There is no judgment involved,
-              so Rounds applies the diff it was handed and nothing else.
+              chant produces the diff itself — pin an action to a SHA, an image to a digest, <code>write-all</code> to
+              least privilege. No judgment involved, so Rounds applies it unchanged.
             </p>
             <pre className="lp-diff">
               <code>
@@ -128,10 +129,7 @@ export function Landing(props: { error: string | null; onPaste: (s: Settings) =>
                 <span className="add">+  contents: read</span>
               </code>
             </pre>
-            <p className="fineprint">
-              Few rules, but the ones that fire most: almost every repository has an unpinned action or a missing{" "}
-              <code>permissions:</code> block.
-            </p>
+            <p className="fineprint">Few rules — and the ones that fire in almost every repository.</p>
           </div>
 
           <div className="lp-tier opt">
@@ -142,12 +140,10 @@ export function Landing(props: { error: string | null; onPaste: (s: Settings) =>
             <h3>Judgment calls</h3>
             <p>
               Worth a pull request, but the fix depends on what you meant — a container that may run as root, a{" "}
-              <code>pull_request_target</code> that checks out untrusted code, a Cloud SQL instance open to the world.
-              Tick <i>also propose the judgment calls</i> when you enroll and Rounds makes the change itself, then
-              re-runs the audit to prove the finding is gone and nothing new appeared. If it cannot verify it, it
-              abandons the change and tells you why rather than opening it.
+              <code>pull_request_target</code> checking out untrusted code. Tick the box when you enroll and Rounds
+              makes the change itself.
             </p>
-            <p className="fineprint">This is the valuable half, and the half that needs a human reading it. That is exactly why it is opt-in.</p>
+            <p className="fineprint">The valuable half, and the half that needs reading. Hence opt-in.</p>
           </div>
 
           <div className="lp-tier off">
@@ -157,84 +153,52 @@ export function Landing(props: { error: string | null; onPaste: (s: Settings) =>
             </div>
             <h3>Hygiene</h3>
             <p>
-              Deprecations, style, missing timeouts, duplicate workflow names. Real, worth knowing, not worth
-              interrupting you over. These appear in the report and never become a pull request.
+              Deprecations, style, missing timeouts: worth knowing, never worth interrupting you. They appear in the
+              report and nowhere else.
             </p>
           </div>
         </div>
-      </section>
-
-      <section className="lp-section" id="round">
-        <h2>What one round does</h2>
-        <div className="lp-steps">
-          <Step n={1} title="Refresh">
-            Clone at the head of the default branch, with a token that expires in an hour and can only read.
-          </Step>
-          <Step n={2} title="Reconcile before it decides">
-            Ask what it has already proposed here. A pull request still open is left alone. One you{" "}
-            <b>closed without merging is a no, permanently</b> — that finding is never raised again. One that merged
-            and came back is treated as new, because it regressed.
-          </Step>
-          <Step n={3} title="Audit and cluster">
-            Run chant, then group findings one cluster per file, so a fix to a workflow never arrives tangled with a
-            fix to a Dockerfile.
-          </Step>
-          <Step n={4} title="Fix, then prove it">
-            Apply the change and re-run the audit. The findings must be gone, the merge-worthy count must not have
-            gone up, and every file it touched must still parse. <b>If it cannot verify, it opens nothing.</b>
-          </Step>
-          <Step n={5} title="Propose">
-            One pull request per file, citing the rules with links to their reference and the before/after counts.
-            Never more than three open at once.
-          </Step>
-        </div>
-        <p className="lp-sub">
-          A clean round opens nothing and says so. Most weeks, that is what you want from it.
-        </p>
       </section>
 
       <section className="lp-section" id="trust">
         <h2>Nothing that reads your repository can write to it</h2>
         <p className="lp-sub">
-          Configuration files are input, and input in a repository is something somebody else may have written. So the
-          half of Rounds that reads them holds nothing that could be talked into misusing.
+          Configuration files are input somebody else may have written, so the half of Rounds that reads them holds
+          nothing worth misusing.
         </p>
         <div className="lp-split">
           <div className="lp-card">
             <h3>What the audit holds</h3>
             <p>
-              A signed note saying you authorized work on one repository. It is not a GitHub credential — on its own
-              it opens nothing. Each round it buys a token that <b>can only read</b>, lasts an hour, and reaches
-              exactly one repository.
+              A signed note that you authorized work on one repository — not a GitHub credential. It buys a token that
+              <b> can only read</b>, for an hour, for that repository.
             </p>
           </div>
           <div className="lp-card">
             <h3>What actually writes</h3>
             <p>
-              This service, and only once the fix has been verified. The commit, the branch and the pull request are
-              made here, with a credential that never leaves this process and exists for the length of one request.
+              This service, once the fix is verified, with a credential that never leaves it and lives for one request.
             </p>
           </div>
         </div>
         <p className="lp-sub">
-          Which means the rules above are not good intentions. The branch name is derived, not supplied; a cluster
-          you declined is refused here; the cap is counted here. A round that tried to go outside them would be
-          asking this service to do it, and would be turned down.
+          Which makes the rules enforcement rather than intent: a fix that fails re-verification opens nothing, a pull
+          request you closed unmerged is never proposed again, the branch is derived rather than supplied, and at most
+          three sit open at once.
         </p>
         <p className="fineprint">
-          Access is a GitHub App you install on the repositories you choose. Revoking is uninstalling it — there is no
-          stored token anywhere to go hunting for.
+          Access is a GitHub App you install on the repositories you choose. Revoking is uninstalling it — no stored
+          token to go hunting for.
         </p>
       </section>
 
       <section className="lp-section" id="policy">
         <h2>The repository sets its own terms</h2>
         <p className="lp-sub">
-          Drop a <code>.rounds.yml</code> in the root and it overrides everything above. It is read and enforced by
-          the service, not honored on the way past.
+          A <code>.rounds.yml</code> in the root overrides all of it, read and enforced by the service.
         </p>
         <pre className="lp-code">
-          <code>{`enabled: true              # false → the round does nothing at all
+          <code>{`enabled: true              # false → nothing happens at all
 tiers: [quick-win]         # quick-win, needs-review
 ignore: [GHA021]           # rule ids never to propose
 paths_ignore: ["examples/**"]
@@ -246,14 +210,7 @@ max_open_prs: 3`}</code>
         <div className="lp-ctacopy">
           <h2>Turn it on and forget it</h2>
           <p>
-            Rounds runs on your own <a href="https://github.com/BinaryBourbon/fountain">Fountain</a> — one schedule
-            per repository, on a computer of your own. Sign in, install the GitHub App on the repositories you want
-            audited, pick a cadence.
-          </p>
-          <p className="fineprint">
-            The interactive version is <a href="https://github.com/jhgaylor/mend">Mend</a>: point it at a repo, watch
-            it work, take the patch. Rounds is the same audit with the opposite defaults, because nobody is watching
-            when it runs.
+            Sign in, install the GitHub App where you want it, pick a cadence.
           </p>
         </div>
         <Connect error={props.error} onPaste={props.onPaste} />
@@ -262,7 +219,8 @@ max_open_prs: 3`}</code>
       <footer className="lp-foot">
         <p className="fineprint">
           The audit is <a href="https://intentius.io/chant/cli/audit/">chant</a>. The schedule and the computer are{" "}
-          <a href="https://github.com/BinaryBourbon/fountain">Fountain</a>.{" "}
+          <a href="https://github.com/BinaryBourbon/fountain">Fountain</a>. The interactive version — point it at a
+          repo, watch it work, take the patch — is <a href="https://github.com/jhgaylor/mend">Mend</a>.{" "}
           <a href="https://github.com/jhgaylor/rounds">Source</a>.
         </p>
       </footer>
@@ -275,18 +233,6 @@ function Stat(props: { n: string; label: string }) {
     <div className="lp-stat">
       <b>{props.n}</b>
       <span>{props.label}</span>
-    </div>
-  );
-}
-
-function Step(props: { n: number; title: string; children: React.ReactNode }) {
-  return (
-    <div className="lp-step">
-      <span className="lp-stepn">{props.n}</span>
-      <div>
-        <h3>{props.title}</h3>
-        <p>{props.children}</p>
-      </div>
     </div>
   );
 }

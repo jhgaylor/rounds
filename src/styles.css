@@ -413,12 +413,6 @@ select { font: inherit; font-size: 13px; color: var(--text); background: var(--b
 .lp-diff .del { color: var(--del); background: var(--del-bg); display: inline-block; width: 100%; }
 .lp-code { white-space: pre; color: var(--text-2); }
 
-.lp-steps { display: flex; flex-direction: column; gap: 4px; }
-.lp-step { display: flex; gap: 16px; padding: 14px 0; border-top: 1px solid var(--border); }
-.lp-step:first-child { border-top: none; padding-top: 0; }
-.lp-stepn { flex-shrink: 0; width: 26px; height: 26px; border-radius: 50%; background: var(--brand-soft); color: var(--brand); font-size: 12.5px; font-weight: 600; display: flex; align-items: center; justify-content: center; }
-.lp-step h3 { margin: 0 0 4px; font-size: 15px; }
-.lp-step p { margin: 0; font-size: 14px; line-height: 1.6; color: var(--text-2); }
 
 .lp-split { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
 
