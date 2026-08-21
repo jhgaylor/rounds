@@ -378,10 +378,6 @@ select { font: inherit; font-size: 13px; color: var(--text); background: var(--b
 .lp-lede { margin: 0 0 28px; font-size: 17px; line-height: 1.6; color: var(--text-2); max-width: 660px; }
 @media (max-width: 720px) { .lp-hero h1 { font-size: 32px; } .lp-lede { font-size: 15.5px; } }
 
-.lp-herostats { display: flex; flex-wrap: wrap; gap: 36px; padding: 20px 0 16px; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); margin-bottom: 16px; }
-.lp-stat { display: flex; flex-direction: column; gap: 2px; }
-.lp-stat b { font-size: 30px; letter-spacing: -0.02em; color: var(--brand); }
-.lp-stat span { font-size: 12.5px; color: var(--muted); }
 
 .lp-section { padding-top: 56px; padding-bottom: 8px; }
 .lp-section h2 { margin: 0 0 12px; font-size: 27px; letter-spacing: -0.02em; }
@@ -414,7 +410,6 @@ select { font: inherit; font-size: 13px; color: var(--text); background: var(--b
 .lp-code { white-space: pre; color: var(--text-2); }
 
 
-.lp-split { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
 
 .lp-cta { display: grid; grid-template-columns: 1fr minmax(300px, 380px); gap: 40px; align-items: start; padding-top: 64px; padding-bottom: 48px; margin-top: 56px; border-top: 1px solid var(--border); }
 .lp-cta h2 { margin: 0 0 12px; font-size: 27px; letter-spacing: -0.02em; }

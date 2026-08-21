@@ -56,7 +56,6 @@ export function Landing(props: { error: string | null; onPaste: (s: Settings) =>
         <nav className="lp-navlinks">
           <a href="#what">What it watches</a>
           <a href="#tiers">What it will open</a>
-          <a href="#trust">Why it is safe</a>
           <a href="https://github.com/jhgaylor/rounds">Source</a>
         </nav>
       </header>
@@ -68,25 +67,15 @@ export function Landing(props: { error: string | null; onPaste: (s: Settings) =>
           <b>Nothing watches your configuration.</b>
         </h1>
         <p className="lp-lede">
-          Workflows, manifests, Dockerfiles, Helm charts and cloud templates drift the way dependencies do, and nobody
-          gets a pull request about it. Rounds audits them on a schedule with{" "}
-          <a href="https://intentius.io/chant/cli/audit/">chant</a>, fixes what it can prove it fixed, and opens one.
-        </p>
-        <div className="lp-herostats">
-          <Stat n={String(TOTAL)} label="rules" />
-          <Stat n={String(FAMILIES.length)} label="config formats" />
-          <Stat n="1" label="pull request per file" />
-          <Stat n="0" label="dashboards to check" />
-        </div>
-        <p className="fineprint">
-          It runs whether or not this page is open. You meet the work on GitHub.
+          Workflows, manifests, Dockerfiles, Helm charts and cloud templates drift the way dependencies do. Rounds
+          audits them on a schedule, fixes what it can prove it fixed, and opens the pull request.
         </p>
       </section>
 
       <section className="lp-section" id="what">
         <h2>What it watches</h2>
         <p className="lp-sub">
-          {TOTAL} rules, each citing its source — OSSF Scorecard, GitHub's hardening guides, cloud provider baselines.
+          {TOTAL} rules from OSSF Scorecard, GitHub's hardening guides and the cloud providers' security baselines.
         </p>
         <div className="lp-grid tight">
           {FAMILIES.map((f) => (
@@ -99,15 +88,11 @@ export function Landing(props: { error: string | null; onPaste: (s: Settings) =>
             </div>
           ))}
         </div>
-        <p className="fineprint">
-          Unpinned actions, missing <code>permissions:</code> blocks, public buckets, root containers, secrets inlined
-          into Helm templates.
-        </p>
       </section>
 
       <section className="lp-section" id="tiers">
         <h2>What it will actually open a pull request for</h2>
-        <p className="lp-sub">chant sorts every finding into three tiers, and Rounds treats them differently on purpose.</p>
+        <p className="lp-sub">We sort every finding into three tiers, and open pull requests for the ones that earn one.</p>
 
         <div className="lp-tiers">
           <div className="lp-tier on">
@@ -117,8 +102,8 @@ export function Landing(props: { error: string | null; onPaste: (s: Settings) =>
             </div>
             <h3>Mechanical</h3>
             <p>
-              chant produces the diff itself — pin an action to a SHA, an image to a digest, <code>write-all</code> to
-              least privilege. No judgment involved, so Rounds applies it unchanged.
+              We produce the diff — pin an action to a SHA, an image to a digest, <code>write-all</code> to least
+              privilege. The edit is known rather than judged, so it goes up exactly as generated.
             </p>
             <pre className="lp-diff">
               <code>
@@ -158,37 +143,9 @@ export function Landing(props: { error: string | null; onPaste: (s: Settings) =>
             </p>
           </div>
         </div>
-      </section>
-
-      <section className="lp-section" id="trust">
-        <h2>Nothing that reads your repository can write to it</h2>
-        <p className="lp-sub">
-          Configuration files are input somebody else may have written, so the half of Rounds that reads them holds
-          nothing worth misusing.
-        </p>
-        <div className="lp-split">
-          <div className="lp-card">
-            <h3>What the audit holds</h3>
-            <p>
-              A signed note that you authorized work on one repository — not a GitHub credential. It buys a token that
-              <b> can only read</b>, for an hour, for that repository.
-            </p>
-          </div>
-          <div className="lp-card">
-            <h3>What actually writes</h3>
-            <p>
-              This service, once the fix is verified, with a credential that never leaves it and lives for one request.
-            </p>
-          </div>
-        </div>
-        <p className="lp-sub">
-          Which makes the rules enforcement rather than intent: a fix that fails re-verification opens nothing, a pull
-          request you closed unmerged is never proposed again, the branch is derived rather than supplied, and at most
-          three sit open at once.
-        </p>
         <p className="fineprint">
-          Access is a GitHub App you install on the repositories you choose. Revoking is uninstalling it — no stored
-          token to go hunting for.
+          One pull request per file, never more than three open at once, and never again for one you closed unmerged.
+          A fix it cannot verify does not go up.
         </p>
       </section>
 
@@ -224,15 +181,6 @@ max_open_prs: 3`}</code>
           <a href="https://github.com/jhgaylor/rounds">Source</a>.
         </p>
       </footer>
-    </div>
-  );
-}
-
-function Stat(props: { n: string; label: string }) {
-  return (
-    <div className="lp-stat">
-      <b>{props.n}</b>
-      <span>{props.label}</span>
     </div>
   );
 }

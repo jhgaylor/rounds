@@ -293,9 +293,14 @@ describe("Landing", () => {
     expect(html.indexOf("Nothing watches your configuration")).toBeLessThan(html.indexOf("Sign in with Fountain"));
   });
 
-  test("it says what reads your code cannot write, which is the whole trust argument", () => {
-    expect(html).toContain("Nothing that reads your repository can write to it");
-    expect(html).toContain("can only read");
+  // How the credential is arranged is an architecture decision, not a reason
+  // anybody enrolls a repository. What survives here is what it will and will
+  // not do to your repository, which is a promise rather than a mechanism.
+  test("promises what it does, not how it is wired", () => {
+    expect(html).toContain("never more than three open at once");
+    expect(html).toContain("never again for one you closed unmerged");
+    expect(html).not.toContain("read-only");
+    expect(html).not.toContain("grant");
   });
 
   // It is a page for buying an outcome, not a tour of the machinery. Naming
