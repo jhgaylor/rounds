@@ -371,13 +371,12 @@ select { font: inherit; font-size: 13px; color: var(--text); background: var(--b
 .lp-navlinks a:hover { color: var(--brand); text-decoration: underline; text-underline-offset: 3px; }
 @media (max-width: 720px) { .lp-navlinks { display: none; } }
 
-.lp-hero { padding-top: 40px; padding-bottom: 64px; }
+.lp-hero { padding-top: 40px; padding-bottom: 16px; }
 .lp-eyebrow { margin: 0 0 14px; font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
 .lp-hero h1 { margin: 0 0 20px; font-size: 46px; line-height: 1.12; letter-spacing: -0.03em; font-weight: 700; }
 .lp-hero h1 b { color: var(--brand); font-weight: 700; }
-.lp-lede { margin: 0 0 28px; font-size: 17px; line-height: 1.6; color: var(--text-2); max-width: 660px; }
+.lp-lede { margin: 0; font-size: 17px; line-height: 1.6; color: var(--text-2); max-width: 660px; }
 @media (max-width: 720px) { .lp-hero h1 { font-size: 32px; } .lp-lede { font-size: 15.5px; } }
-
 
 .lp-section { padding-top: 56px; padding-bottom: 8px; }
 .lp-section h2 { margin: 0 0 12px; font-size: 27px; letter-spacing: -0.02em; }
